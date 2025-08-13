@@ -1,9 +1,24 @@
-# Your Friendly Guide to Reproducing Experiments
+# Your Friendly Guide to Reproducing Our Experiments
 
 Welcome! This guide will walk you through setting up and running experiments. 
 
 It’s split into clear steps: getting datasets, downloading checkpoints, running experiments, and some handy tips. Let’s make this as smooth as possible. 
 
+## 📂 Before you begin...
+
+To avoid import errors and ensure smooth execution, run all commands from the root directory of the ReinFlow repository.
+
+Your directory should look like this:
+
+```bash
+ReinFlow/
+├── agent/
+├── cfg/
+├── script/
+├── util/
+└── ...
+```
+Please double-check that your working directory matches this structure.
 
 ## 1. Getting and Preparing Datasets for Pre-training
 **Should I read this section?**
@@ -206,7 +221,7 @@ Fine-tuning tweaks pre-trained policies with online RL. Check out these examples
 
 ### 3.3 Evaluating
 
-Evaluate pre-trained policies across denoising steps with this command:
+To evaluate pre-trained policies across various denoising steps, run this command in your terminal: 
 ```bash
 python script/run.py --config-dir=cfg/robomimic/eval/transport --config-name=eval_reflow_mlp_img base_policy_path=PATH_TO_THE_POLICY_TO_EVALUATE denoising_step_list=[1,2,4,5,8,16,32,64,128] load_ema=False
 ```
@@ -215,10 +230,23 @@ python script/run.py --config-dir=cfg/robomimic/eval/transport --config-name=eva
   - `load_ema=True` for pre-trained policies; `False` for fine-tuned ones.
   - Can’t set `denoising_step_list`? Add it to your config file.
   - Clear other processes on your machine for accurate timing.
-- **Output:** Saves a `.png` plot and data files for later use. Example: <img src="../sample_figs/denoise_step.png" alt="Evaluation Output" width="60%">
+- **Output:** Saves a `.png` plot and data files for later use. Example: 
+<div align="center">
+  <img src="../sample_figs/denoise_step.png" alt="Evaluation Output" width="60%">
+</div>
 
+- **What to record videos?** For Gym, Robomimic, and Franka Kitchen, you can change the `self.record_video=True` in the corresponding evaluation script and set `self.record_env_index` to the environment id that you wish to record. You can also specify the height and width of your video by changing the values of `self.frame_width` and `self.frame_height`. Then after running the evaluation script, you will see a .mp4 file under your output directory along with your plot! Below, we provide an example video (converted to .gif), which records Fine-tuned Shortcut Flow in Robomimic-can environment, inferred at 1 denoising steps. 
 
-**Warning** If you trained a flow matching policy with ReinFlow, typically we will clip the denoised actions during fine-tuning. Therefore, we recommend you turn on `self.clip_intermediate_actions=True` in your evaluation script. Otherwise the reward may drop. 
+<div align="center">
+  <img src="../sample_figs/ShortCutFlow_can_step1_1080_1920.gif" controls title="Fine-tuned Shortcut Flow in Robomimic-can at 1 denoising step">
+</div>
+
+<!-- <video width="1080" height="1920" controls>
+  <source src="sample_figs/ShortCutFlow_can_step1_1080_1920.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video> -->
+
+- **Warning** If you trained a flow matching policy with ReinFlow, typically we will clip the denoised actions during fine-tuning. Therefore, we recommend you turn on `self.clip_intermediate_actions=True` in your evaluation script. Otherwise the reward may drop. 
 
 
 ### 3.4 Sensitivity Analysis
@@ -263,9 +291,7 @@ We provide the Google Drive link to the 1-ReFlow checkpoints trained in Square w
   - Set `sim_device=<gpu_id>` for fast rendering.
   - No EGL? Use `sim_device=null` for slower osmesa rendering.
 
-### Seeing Results
-
+### Visualizing Results for Other benchmarks in DPPO:
 - **Furniture-Bench:** Set `env.specific.headless=False` and `env.n_envs=1`.
 - **D3IL:** Use `+env.render=True`, `env.n_envs=1`, `train.render.num=1`, and `script/test_d3il_render.py`.
-- **Robomimic:** Record videos with `env.save_video=True`, `train.render.freq=<iterations>`, `train.render.num=<num_videos>`.
 

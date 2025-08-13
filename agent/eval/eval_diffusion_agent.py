@@ -56,10 +56,12 @@ class EvalDiffusionAgent(EvalAgent):
         super().__init__(cfg)
         ################################################      overload        #########################################################
         self.load_ema = cfg.get('load_ema', False) # Turn to True when evaluating pretrained models.
-        self.record_video =False # False
+        self.record_video =False
+        self.frame_width = 640  # Default, can be overridden
+        self.frame_height = 480
         self.record_env_index=0
-        self.render_onscreen =False #True
-        self.denoising_steps = cfg.get("denoising_step_list", [1,2, 4,8,10,12,14,16,18,20,22,24,32,64,128,256])
+        self.render_onscreen =False
+        self.denoising_steps = cfg.get("denoising_step_list", [1,2,4,8,16,32,64])
         self.denoising_steps_trained = self.cfg.denoising_steps
         self.plot_scale='standard'
         self.ddim_eta = 1.0   # eta==1: DDPM   eta==0: DDIM

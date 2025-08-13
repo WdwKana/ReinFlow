@@ -2,10 +2,23 @@
 # ReinFlow: Fine-tuning Flow Matching Policy with Online Reinforcement Learning
 
 <!-- schematic: -->
-<div style="text-align: center;">
-  <img src="sample_figs/schematic.png" alt="Architecture Diagram" width="98%" style="display: inline-block;" />
-</div>
+<p align="center">
+  <img src="sample_figs/schematic.png" alt="Architecture Diagram" width="90%">
+</p>
+
+
 <!-- links: -->
+
+
+<!-- <div align="center">
+  <img src="./sample_figs/ShortCutFlow_can_step1_1080_1920.gif" title="Fine-tuned Shortcut Flow in Robomimic-can at 1 denoising step" width="65%">
+</div> -->
+
+<p align="center">
+  <img src="./sample_figs/ShortCutFlow_can_step1_1080_1920.gif" width="42%" alt="Shortcut Flow Can">
+  <img src="./sample_figs/shortcut_transport_4steps.gif" width="42%" alt="Shortcut Transport">
+</p>
+
 <hr>
 <div align="center">
   <a href="https://reinflow.github.io/" target="_blank">
@@ -17,6 +30,9 @@
   <a href="https://huggingface.co/datasets/ReinFlow/ReinFlow-data-checkpoints-logs/" target="_blank">
     <img alt="Checkpoints" src="https://img.shields.io/badge/Download-Checkpoints-orange?style=for-the-badge" />
   </a>
+  <!-- <a href="" target="_blank">
+    <img alt="X" src="https://img.shields.io/badge/View-X_post-black?style=for-the-badge" />
+  </a> -->
 </div>
 <!-- mini table of contents: -->
 <p align="center">
@@ -29,14 +45,52 @@
   <a href="#acknowledgement">Acknowledgement</a>
 </p>
 
+
+
+
+This is the official implementation of _"ReinFlow: Fine-tuning Flow Matching Policy with Online Reinforcement Learning"_.  
+
+If you like our work, we'll be happy if you give us a star **:star:**!
+
+## 🚀 About ReinFlow
+
+
+**ReinFlow** is a flexible **policy gradient framework** for fine-tuning **flow matching policies** at **any denoising step**.
+
+How does it work?  
+👉 First, train flow policies using **imitation learning** (behavior cloning).  
+👉 Then, fine-tune them with **online reinforcement learning** using ReinFlow!
+
+🧩 **Supports**:
+- ✅ 1-Rectified Flow  
+- ✅ Shortcut Models  
+- ✅ Any other policy defined by ODEs (in principle)
+
+📈 **Empirical Results**: ReinFlow achieves strong performance across a variety of robotic tasks:
+- 🦵 Legged Locomotion (OpenAI Gym)  
+- ✋ State-based manipulation (Franka Kitchen)  
+- 👀 Visual manipulation (Robomimic)
+
+🧠 **Key Innovation**: ReinFlow trains a **noise injection network** end-to-end:
+- ✅ Makes policy probabilities tractable, even with **very few denoising steps** (e.g., 4, 2, or 1)  
+- ✅ Robust to discretization and Monte Carlo approximation errors
+
+Learn more on our 🔗 [project website](https://reinflow.github.io/) or check out the arXiv paper. 
+
+
+
 ## :loudspeaker: News
+* [2025/07/30] Fixed the rendering bug in Robomimic. Now supports rendering at 1080p resolution. 
+* [2025/07/29] Add tutorial on how to record videos during evaluation in the [docs](docs/ReproduceExps.md)
 * [2025/06/14] Updated webpage for a detailed explanation to the algorithm design.
+* [2025/05/28] Paper is posted on arXiv! 
 
 ## :rocket:  Installation
 Please follow the steps in [installation/reinflow-setup.md](./installation/reinflow-setup.md).
 
 ## :rocket: Quick Start: Reproduce Our Results
 To fully reproduce our experiments, please refer to [ReproduceExps.md](docs/ReproduceExps.md). 
+
 To download our training data and reproduce the plots in the paper, please refer to [ReproduceFigs.md](docs/ReproduceFigs.md).
 
 ## :rocket: Implementation Details

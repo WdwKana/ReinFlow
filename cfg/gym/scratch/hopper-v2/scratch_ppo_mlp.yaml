@@ -43,7 +43,7 @@ horizon_steps: 1
 act_steps: 1
 
 train:
-  n_train_itr: 1000
+  n_train_itr: 1001
   n_critic_warmup_itr: 0
   n_steps: 1_000
   gamma: 0.99

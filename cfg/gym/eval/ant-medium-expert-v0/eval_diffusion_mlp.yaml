@@ -12,6 +12,8 @@ normalization_path: ${oc.env:REINFLOW_DATA_DIR}/gym/${env_name}/normalization.np
 denoising_step_list: [20]
 seed: 42
 device: cuda:2
+sim_device: cuda:0
+
 env_name: ant-medium-expert-v0
 obs_dim: 111
 action_dim: 8

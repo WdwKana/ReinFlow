@@ -21,9 +21,9 @@ normalization_path: ${oc.env:REINFLOW_DATA_DIR}/gym/${env_name}/normalization.np
 eval_log_dir:
 seed: 42
 device: cuda:2
-
-denoising_steps: 4 #20
-denoising_step_list: [4] #20
+sim_device: cuda:0
+denoising_steps: 4
+denoising_step_list: [4]
 load_ema: True
 
 batch_size: 128

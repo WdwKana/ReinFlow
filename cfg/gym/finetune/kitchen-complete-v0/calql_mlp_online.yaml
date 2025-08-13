@@ -44,7 +44,7 @@ wandb:
 
 
 train:
-  n_train_itr: 10000
+  n_train_itr: 10010
   n_steps: 1  # not used
   n_episode_per_epoch: 1
   gamma: 0.99

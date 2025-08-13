@@ -41,7 +41,7 @@ wandb:
   run: ${now:%H-%M-%S}_${name}
 
 train:
-  n_train_itr: 1000
+  n_train_itr: 1001
   n_steps: 1  # not used
   gamma: 0.99
   actor_lr: 1e-4

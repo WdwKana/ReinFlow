@@ -49,12 +49,12 @@ class RobomimicLowdimWrapper(gym.Env):
         ],
         clamp_obs=False,
         init_state=None,
-        render_hw=(256, 256),
+        # render_hw=(256, 256),   # revised by ReinFlow authors to make the render() function have a unified interface. 
         render_camera_name="agentview",
     ):
         self.env = env
         self.init_state = init_state
-        self.render_hw = render_hw
+        # self.render_hw = render_hw  # revised by ReinFlow authors to make the render() function have a unified interface. 
         self.render_camera_name = render_camera_name
         self.video_writer = None
         self.clamp_obs = clamp_obs
@@ -142,24 +142,48 @@ class RobomimicLowdimWrapper(gym.Env):
             raw_obs = self.env.reset()
         return self.get_observation(raw_obs)
 
+    # def step(self, action):
+    #     if self.normalize:
+    #         action = self.unnormalize_action(action)
+    #     raw_obs, reward, done, info = self.env.step(action)
+    #     obs = self.get_observation(raw_obs)
+
+    #     # render if specified
+    #     if self.video_writer is not None:
+    #         video_img = self.render(mode="rgb_array")
+    #         self.video_writer.append_data(video_img)
+
+    #     return obs, reward, False, info
     def step(self, action):
         if self.normalize:
             action = self.unnormalize_action(action)
-        raw_obs, reward, done, info = self.env.step(action)
+        raw_obs, reward, terminated, info = self.env.step(action)
         obs = self.get_observation(raw_obs)
-
+        
+        truncated = self.env.env._check_success()
+        done = terminated or truncated
+        
         # render if specified
         if self.video_writer is not None:
             video_img = self.render(mode="rgb_array")
             self.video_writer.append_data(video_img)
 
-        return obs, reward, False, info
+        return obs, reward, done, info
 
-    def render(self, mode="rgb_array"):
-        h, w = self.render_hw
+    # def render(self, mode="rgb_array"):
+    #     h, w = self.render_hw
+    #     return self.env.render(
+    #         mode=mode,
+    #         height=h,
+    #         width=w,
+    #         camera_name=self.render_camera_name,
+    #     )
+    
+    def render(self, mode="rgb_array", width:int=256, height:int=256):
+        # revised by ReinFlow authors to make the render() function have a unified interface. 
         return self.env.render(
             mode=mode,
-            height=h,
-            width=w,
+            height=height,
+            width=width,
             camera_name=self.render_camera_name,
         )

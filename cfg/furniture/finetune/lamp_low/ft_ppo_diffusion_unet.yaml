@@ -43,7 +43,7 @@ wandb:
   run: ${now:%H-%M-%S}_${name}
 
 train:
-  n_train_itr: 1000
+  n_train_itr: 1001
   n_critic_warmup_itr: 1
   n_steps: ${eval:'round(${env.max_episode_steps} / ${act_steps})'}
   gamma: 0.999

@@ -41,6 +41,8 @@ class EvalImgReFlowAgent(EvalImgAgent):
         self.render_onscreen = False
         self.record_video = False #True 
         self.record_env_index=0
+        self.frame_width = 640  # Default, can be overridden
+        self.frame_height = 480
         self.denoising_steps_trained = None # this is meaningless for reflow. it could be infinity. so we don't show the vertical line. 
         self.model.show_inference_process = False #True # whether to print each integration step during sampling. 
         ####################################################################################

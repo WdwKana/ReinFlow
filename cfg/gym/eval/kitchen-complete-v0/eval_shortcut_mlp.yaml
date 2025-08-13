@@ -24,7 +24,8 @@ base_policy_path:
 normalization_path: ${oc.env:REINFLOW_DATA_DIR}/gym/${env_name}/normalization.npz
 
 seed: 42
-device: cuda:2
+device: cuda:0
+sim_device: cuda:0
 
 denoising_steps: 4 #20
 denoising_step_list: [4] #20
@@ -60,8 +61,8 @@ model:
     cond_dim: ${eval:'${obs_dim} * ${cond_steps}'}
     td_emb_dim: 16
     mlp_dims: [256, 256, 256]
-    cond_mlp_dims: [64, 16]
-    activation_type: ReLU
+    cond_mlp_dims: [32, 16]
+    activation_type: Mish
     out_activation_type: Identity
     use_layernorm: false
     residual_style: true

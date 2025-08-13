@@ -99,11 +99,19 @@ class D3ilLowdimWrapper(gym.Env):
         obs = self.normalize_obs(obs)
         return {"state": obs}, reward, False, info
 
-    def render(self, mode="rgb_array"):
-        h, w = self.render_hw
+    # def render(self, mode="rgb_array"):
+    #     h, w = self.render_hw
+    #     return self.env.render(
+    #         mode=mode,
+    #         height=h,
+    #         width=w,
+    #         camera_name=self.render_camera_name,
+    #     )
+    def render(self, mode="rgb_array", width:int=256, height:int=256):
+        # revised by ReinFlow authors to make the render() function have a unified interface. 
         return self.env.render(
             mode=mode,
-            height=h,
-            width=w,
+            height=height,
+            width=width,
             camera_name=self.render_camera_name,
         )

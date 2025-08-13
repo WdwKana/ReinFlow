@@ -43,7 +43,7 @@ wandb:
   offline_mode: false
 
 train:
-  n_train_itr: 1000000
+  n_train_itr: 1001000
   n_steps: 1
   gamma: 0.99
   actor_lr: 1e-4

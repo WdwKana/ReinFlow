@@ -52,13 +52,13 @@ class RobomimicImageWrapper(gym.Env):
         ],
         clamp_obs=False,
         init_state=None,
-        render_hw=(256, 256),
+        # render_hw=(256, 256),   # revised by ReinFlow authors to make the render() function have a unified interface. 
         render_camera_name="agentview",
     ):
         self.env = env
         self.init_state = init_state
         self.has_reset_before = False
-        self.render_hw = render_hw
+        # self.render_hw = render_hw   # revised by ReinFlow authors to make the render() function have a unified interface. 
         self.render_camera_name = render_camera_name
         self.video_writer = None
         self.clamp_obs = clamp_obs
@@ -184,12 +184,21 @@ class RobomimicImageWrapper(gym.Env):
 
         return obs, reward, False, info
 
-    def render(self, mode="rgb_array"):
-        h, w = self.render_hw
+    # def render(self, mode="rgb_array"):
+    #     h, w = self.render_hw
+    #     return self.env.render(
+    #         mode=mode,
+    #         height=h,
+    #         width=w,
+    #         camera_name=self.render_camera_name,
+    #     )
+    
+    def render(self, mode="rgb_array", width:int=256, height:int=256):
+        # revised by ReinFlow authors to make the render() function have a unified interface. 
         return self.env.render(
             mode=mode,
-            height=h,
-            width=w,
+            height=height,
+            width=width,
             camera_name=self.render_camera_name,
         )
 

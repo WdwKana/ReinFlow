@@ -37,8 +37,10 @@ class EvalShortCutAgent(EvalAgent):
         ################################################      overload        #########################################################
         self.load_ema = cfg.get('load_ema', False) #False # Turn to True when evaluating pretrained models.
         self.clip_intermediate_actions=True
-        self.record_video =False  #False #True
+        self.record_video =False
         self.record_env_index=0
+        self.frame_width = 640  # Default, can be overridden
+        self.frame_height = 480
         self.render_onscreen =False #not self.record_video #False
         self.denoising_steps = cfg.get("denoising_step_list", [1,2, 4,8,10,12,14,16,18,20,22,24,32,64,128,256])
         self.denoising_steps_trained = self.model.max_denoising_steps

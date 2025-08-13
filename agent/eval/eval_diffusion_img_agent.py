@@ -55,11 +55,13 @@ class EvalImgDiffusionAgent(EvalImgAgent):
         super().__init__(cfg)
         self.load_ema = cfg.get('load_ema', False) # Turn to True when evaluating pretrained models.
         self.is_rlft_model=not self.load_ema
-        self.denoising_steps = cfg.get("denoising_step_list", [1,2,4, 8,10, 16, 20,32,64,128])
+        self.denoising_steps = cfg.get("denoising_step_list", [1,2,4,8,16,32,64,128])
         self.ddim_eta = 1.0
         
-        self.render_onscreen = False #True 
-        self.record_video = False #True
+        self.render_onscreen = False 
+        self.frame_width = 640  # Default, can be overridden
+        self.frame_height = 480
+        self.record_video = False
         self.record_env_index=0
         self.denoising_steps_trained = cfg.denoising_steps
         self.plot_scale='standard'

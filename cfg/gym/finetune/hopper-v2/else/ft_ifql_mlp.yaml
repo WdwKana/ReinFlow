@@ -50,7 +50,7 @@ wandb:
   offline_mode: false
 
 train:   # temporarily keep the same as in idql diffusion
-  n_train_itr: 1000
+  n_train_itr: 1001
   n_critic_warmup_itr: 5
   n_steps: 500
   gamma: 0.99

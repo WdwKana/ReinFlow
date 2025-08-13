@@ -25,6 +25,7 @@ normalization_path: ${oc.env:REINFLOW_DATA_DIR}/gym/${env_name}/normalization.np
 
 seed: 42
 device: cuda:2
+sim_device: cuda:0
 
 denoising_steps: 4 #20
 denoising_step_list: [4] #20

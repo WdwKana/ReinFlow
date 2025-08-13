@@ -67,15 +67,6 @@ env:
       reset_within_step: true
   render: true
 
-shape_meta:
-  obs:
-    rgb:
-      shape: [3, 96, 96]
-    state:
-      shape: [9]
-  action: 
-    shape: [7]
-
 model:
   _target_: model.flow.shortcutflow.ShortCutFlow
   network:

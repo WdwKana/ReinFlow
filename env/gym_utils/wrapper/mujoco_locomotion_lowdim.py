@@ -38,7 +38,8 @@ class MujocoLocomotionLowdimWrapper(gym.Env):
         normalization_path,
     ):
         self.env = env
-
+        # self.sim = env.unwrapped.sim
+        
         # setup spaces
         self.action_space = env.action_space
         normalization = np.load(normalization_path)
