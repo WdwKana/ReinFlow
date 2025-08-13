@@ -247,7 +247,7 @@ class PPOFlow(nn.Module):
         chains_vel  = torch.zeros_like(chains_prev, device=self.device)         # [batchsize, self.inference_steps, self.horizon_steps x self.action_dim]
 
         dt = 1.0/self.inference_steps
-        steps = torch.linspace(0, 1-dt, self.inference_steps).repeat(B, 1).to(self.device)  # [batchsize, self.inference_steps]. the points sampled by linspace include the left and right boundaries. so we use 1-dt as the right boundary.  
+        steps = torch.linspace(0, 1, self.inference_steps).repeat(B, 1).to(self.device)  # [batchsize, self.inference_steps]. the points sampled by linspace include the left and right boundaries. so we use 1-dt as the right boundary.  
         for i in range(self.inference_steps):
             t       = steps[:,i]
             xt      = x_chain[:,i]                                              # [batchsize, self.horizon_steps , self.action_dim]
