@@ -61,7 +61,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
 
         self.skip_initial_eval =False
         
-        self.use_early_stop = True
+        self.use_early_stop = False
         
         self.fix_nextvalue_augment_bug=True #False
         
@@ -188,12 +188,49 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                 obs_venv, reward_venv, terminated_venv, truncated_venv, info_venv = self.venv.step(action_venv)
                 
                 # overload, bug fix
-                self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, terminated_venv, truncated_venv)
+                #self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, terminated_venv, truncated_venv)
+                
+                # add success info
+                # 从info中提取成功信息
+                success_venv = np.zeros(self.n_envs, dtype=bool)
+                has_final_info = isinstance(info_venv, dict) and '_final_info' in info_venv
+                if has_final_info:
+                    mask = info_venv['_final_info']
+                    if isinstance(mask, torch.Tensor):
+                        mask = mask.detach().cpu().numpy().astype(bool)
+                    
+                    if mask.any():  # 有episode完成
+                        final_info = info_venv.get('final_info', {})
+                        episode_info = final_info.get('episode', {})
+                        succ = episode_info.get('success_at_end', episode_info.get('success_once', None))
+                        if succ is not None:
+                            if isinstance(succ, torch.Tensor):
+                                succ = succ.detach().cpu().numpy().astype(bool)
+                            success_venv[mask] = succ[mask]
+                        
+                        # Debug output for single env case
+                        if self.n_envs == 1:
+                            print(f"[CHK2] Success extraction: has_final_info={has_final_info}, mask={mask[0] if len(mask) > 0 else 'N/A'}, episode_keys={list(episode_info.keys())}, success_value={success_venv[0]}")
+                else:
+                    # Try direct success from info
+                    if isinstance(info_venv, list) and len(info_venv) > 0 and 'success' in info_venv[0]:
+                        success_venv[0] = info_venv[0]['success']
+                        if self.n_envs == 1:
+                            print(f"[CHK2] Success from direct info: success={success_venv[0]}")
+                    elif self.n_envs == 1:
+                        print(f"[CHK2] No success info found in info_venv structure")
+
+                # 使用环境返回的terminated信号（已经被MultiStep修复过）
+                self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, 
+                                terminated_venv, truncated_venv, success_venv)
                 
                 self.prev_obs_venv = obs_venv
                 self.cnt_train_step+= self.n_envs * self.act_steps if not self.eval_mode else 0
             
             self.buffer.summarize_episode_reward()
+            print(f"DEBUG: Episode统计 - 完成的episodes: {self.buffer.num_episode_finished}")
+            print(f"DEBUG: 实际的_final_info计数: {np.sum(info_venv.get('_final_info', np.zeros(self.n_envs)).astype(bool)) if isinstance(info_venv, dict) else 0}")
+            print(f"DEBUG: firsts_trajs中1的个数: {torch.sum(self.buffer.firsts_trajs).item()}")
             if not self.eval_mode:
                 ### bug fix
                 self.buffer: PPOFlowImgBufferGPU

@@ -149,7 +149,7 @@ class FlowMLP(nn.Module):
         if save_chains:
             x_chain=torch.zeros((B, inference_steps+1, self.horizon_steps, self.action_dim), device=device)
         dt = (1 / inference_steps) * torch.ones_like(x_hat, device=device)
-        steps = torch.linspace(0, 1, inference_steps, device=device).repeat(B, 1)
+        steps = torch.linspace(0, 1-1 / inference_steps, inference_steps, device=device).repeat(B, 1)
         for i in range(inference_steps):
             t = steps[:, i]
             vt = self.forward(x_hat, t, cond)
@@ -199,7 +199,7 @@ class ExploreNoiseNet(nn.Module):
         noise_logvar    = self.mlp_logvar(noise_feature)
         noise_std       = self.process_noise(noise_logvar)
         return noise_std
-
+  
     def process_noise(self, noise_logvar):
         '''
         input:
@@ -349,7 +349,7 @@ class NoisyFlowMLP(nn.Module):
         '''
         self.logprob_noise_levels = torch.zeros(self.denoising_steps, device=self.device, requires_grad=False)
         
-        steps = torch.linspace(0, 1, self.denoising_steps, device=self.device)
+        steps = torch.linspace(0, 1-1 /self.denoising_steps, self.denoising_steps, device=self.device)
         for i, t in enumerate(steps):
             if force_level:
                 self.logprob_noise_levels[i] = torch.tensor(force_level, device=self.device)
@@ -628,4 +628,195 @@ class NoisyVisionFlowMLP(NoisyFlowMLP):
             noise_std = self.explore_noise_net.forward(noise_feature=noise_feature)
         
         return vel, noise_std if learn_exploration_noise else noise_std.detach()
+
+class SlotVisionFlowMLP(nn.Module):
+    def __init__(
+        self,
+        backbone,
+        action_dim,
+        horizon_steps,
+        cond_dim,
+        time_dim=16,
+        mlp_dims=[256, 256],
+        activation_type="Mish",
+        out_activation_type="Identity",
+        use_layernorm=False,
+        residual_style=False,
+        slot_feature_dim=None,
+        dropout=0,
+        augment=False,
+        **kwargs,
+    ):
+        super().__init__()
+        '''
+        super().__init__(
+        horizon_steps = horizon_steps,
+        action_dim = action_dim,
+        cond_dim = cond_dim,
+        time_dim = time_dim,
+        mlp_dims = mlp_dims,
+        activation_type = activation_type,
+        out_activation_type = out_activation_type,
+        use_layernorm = use_layernorm,
+        residual_style = residual_style,
+        )
+        '''
+        self.action_dim = action_dim
+        self.horizon_steps = horizon_steps
+        self.cond_dim = cond_dim
+        self.time_dim = time_dim
+        #self.mlp_dims = mlp_dims
+        #self.activation_type = activation_type
+        #self.out_activation_type = out_activation_type
+        #self.use_layernorm = use_layernorm
+        #self.residual_style = residual_style
+        self.augment = augment
+        self.backbone = backbone
+        self.act_dim_total = action_dim * horizon_steps
+        if augment:
+            self.aug = RandomShiftsAug(pad=4)
+        
+        if slot_feature_dim is None:
+            self.slot_feature_dim = backbone.total_slot_dim
+            self.compress = None
+        else:
+            self.slot_feature_dim = slot_feature_dim
+            self.compress = nn.Sequential(
+                nn.Linear(backbone.total_slot_dim, slot_feature_dim),
+                nn.LayerNorm(slot_feature_dim),
+                nn.Dropout(dropout),
+                nn.ReLU(),
+            )
+        self.cond_enc_dim = self.slot_feature_dim + cond_dim
+        self.time_embedding = nn.Sequential(
+            SinusoidalPosEmb(time_dim),
+            nn.Linear(time_dim, time_dim * 2),
+            nn.Mish(),
+            nn.Linear(time_dim * 2, time_dim),
+        )
+        input_dim = time_dim + self.act_dim_total   + self.cond_enc_dim
+        #output_dim = self.act_dim_total
+        model = ResidualMLP if residual_style else MLP
+        self.mlp_mean = model(
+            [input_dim] + mlp_dims + [self.act_dim_total],
+            activation_type=activation_type,
+            out_activation_type=out_activation_type,
+            use_layernorm=use_layernorm,
+        )
+    
+    def forward(
+        self,
+        action,
+        time,
+        cond,
+        output_embedding=False,
+        **kwargs,
+    ):
+        """
+        inputs:
+            action: (B, Ta, Da) action chunk
+            time: (B,) or float within [0,1), flow time
+            cond: dict with key state/rgb; more recent obs at the end
+                state: (B, To, Do)
+                rgb: (B, To, C, H, W)
+        outputs:
+            velocity. 
+            vel: (B, Ta, Da) when output_embedding==False 
+            vel,time_emb, cond_emb: when output_embedding==False
+        """
+        B, Ta, Da = action.shape
+        # flatten chunk
+        action = action.view(B, -1)
+        state = cond["state"].view(B, -1)
+        rgb = cond["rgb"][:,-1]
+        rgb = rgb.float()
+        if self.augment:
+            rgb = self.aug(rgb)
+        slot_feat = self.backbone(rgb,flatten=True)
+        if self.compress is not None:
+            slot_feat = self.compress(slot_feat)
+        cond_encoded = torch.cat([slot_feat, state], dim=-1)
+        time = time.view(B, 1)
+        time_emb = self.time_embedding(time).view(B, self.time_dim)
+        emb = torch.cat([action, time_emb, cond_encoded], dim=-1)
+        vel = self.mlp_mean(emb)
+        if output_embedding:
+            return vel.view(B, Ta, Da), time_emb, cond_encoded
+        return vel.view(B, Ta, Da)
+
+class NoisySlotVisionFlowMLP(NoisyFlowMLP):
+    def __init__(
+        self,
+        policy:SlotVisionFlowMLP,
+        denoising_steps,
+        learn_explore_noise_from,
+        inital_noise_scheduler_type,
+        min_logprob_denoising_std,
+        max_logprob_denoising_std,
+        use_time_independent_noise,
+        time_dim_explore,
+        learn_explore_time_embedding,
+        device,
+        noise_hidden_dims=None,
+        activation_type='Tanh',
+    ):
+        super().__init__(
+        policy = policy,
+        denoising_steps = denoising_steps,
+        learn_explore_noise_from = learn_explore_noise_from,
+        inital_noise_scheduler_type = inital_noise_scheduler_type,
+        min_logprob_denoising_std = min_logprob_denoising_std,
+        max_logprob_denoising_std = max_logprob_denoising_std,
+        learn_explore_time_embedding = learn_explore_time_embedding,
+        use_time_independent_noise = use_time_independent_noise,
+        time_dim_explore = time_dim_explore,
+        device = device,
+        noise_hidden_dims = noise_hidden_dims,
+        activation_type = activation_type,
+        )
+        '''
+        if use_time_independent_noise:
+            noise_input_dim = policy.cond_enc_dim
+        else:
+            noise_input_dim = policy.time_dim + policy.cond_enc_dim
+            if learn_explore_time_embedding:
+                self.time_embedding_explore = policy.time_embedding
+        self.explore_noise_net = MLP(
+            [noise_input_dim,256,256,policy.action_dim * policy.horizon_steps],
+            activation_type=activation_type,
+            out_activation_type=out_activation_type,
+        )
+        '''
+
+    def forward(
+        self,
+        action,
+        time,
+        cond,
+        learn_exploration_noise=False,
+        step=-1,
+        *kargs,
+    ) -> Tuple[Tensor, Tensor]:
+        
+        B = action.shape[0]
+        # get the velocity and the embedding
+        vel, time_emb, cond_emb = self.policy.forward(action, time, cond, output_embedding=True)
+
+        if self.initial_noise_scheduler_type == 'const' or step < self.learn_explore_noise_from:
+            noise_std = self.logprob_noise_levels[:, step].repeat(B,1)
+        else:
+            if self.use_time_independent_noise:
+                noise_feature = cond_emb
+            else:
+                if self.learn_explore_time_embedding:
+                    step_ts = torch.tensor(step, device = self.device).repeat(B)
+                    time_emb_explore = self.time_embedding_explore(step_ts)
+                    noise_feature = torch.cat([time_emb_explore, cond_emb], dim=-1)
+                else:
+                    noise_feature = torch.cat([time_emb.detach(), cond_emb], dim=-1)
+            noise_std = self.explore_noise_net.forward(noise_feature=noise_feature)
+        return vel, noise_std if learn_exploration_noise else noise_std.detach()
+    
+
+
     

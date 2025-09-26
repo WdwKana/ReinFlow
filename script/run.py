@@ -26,13 +26,14 @@ Launcher for all experiments. Download pre-training data, normalization statisti
 Revised by ReinFlow Authors to accomodate resume training and fixing the kitchen tasks import error.
 """
 # clear python cache automatically.
+
 from util.clear_pycache import clean_pycache
 from util.dirs import REINFLOW_DIR
 clean_pycache(directory=REINFLOW_DIR)
 
 # register kitchen tasks in advance. prevent env not found error. 
 import gym
-import d4rl.gym_mujoco
+#import d4rl.gym_mujoco
 
 import gc
 gc.collect()
@@ -49,6 +50,7 @@ from download_url import (
     get_normalization_download_url,
     get_checkpoint_download_url,
 )
+
 # allows arbitrary python code execution in configs using the ${eval:''} resolver
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 OmegaConf.register_new_resolver("round_up", math.ceil)
@@ -64,6 +66,7 @@ log = logging.getLogger(__name__)
 sys.stdout = open(sys.stdout.fileno(), mode="w", buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode="w", buffering=1)
 
+
 @hydra.main(
     version_base=None,
     config_path=os.path.join(os.getcwd(), "cfg"),  # possibly overwritten by --config-path
@@ -71,7 +74,12 @@ sys.stderr = open(sys.stderr.fileno(), mode="w", buffering=1)
 def main(cfg: OmegaConf):
     # resolve immediately so all the ${now:} resolvers will use the same time.
     OmegaConf.resolve(cfg)
-    
+    # 仅 Gym/kitchen 任务才需要 d4rl
+    if cfg.get("env_suite") == "gym" or ("env" in cfg and "kitchen" in str(cfg.env)):
+        try:
+            import d4rl.gym_mujoco
+        except ImportError:
+            log.warning("d4rl 未安装，跳过注册；非 Gym/kitchen 任务可忽略。")
     # ReinFlow Authors: Set rendering backend from config file.
     sim_device = cfg.get('sim_device', None)
     if sim_device is not None:

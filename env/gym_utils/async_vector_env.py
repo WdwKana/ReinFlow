@@ -705,7 +705,7 @@ class AsyncVectorEnv(VectorEnv):
         if indices is None:
             indices = range(self.n_envs)
         return [self.parent_pipes[i] for i in indices]
-
+    '''
     def reset_arg(self, options_list, **kwargs):
         # print(f"[gym_utils.async_vector_env] options_list={options_list}")
         # import inspect
@@ -715,8 +715,35 @@ class AsyncVectorEnv(VectorEnv):
         if isinstance(obs[0], np.ndarray):
             return np.stack(obs)
         else:
-            assert isinstance(obs[0], dict)
+            print(f"DEBUG: obs type: {type(obs)}")
+            print(f"DEBUG: obs length: {len(obs)}")
+            print(f"DEBUG: obs[0] type: {type(obs[0])}")
+            print(f"DEBUG: obs[0] content: {obs[0]}")
+            assert isinstance(obs[0], dict), f"Expected dict, got {type(obs[0])}"
             return obs
+    '''
+    def reset_arg(self, options_list, **kwargs):
+        results = self.call_sync_arg("reset", "options", options_list)
+        #print(f"DEBUG ASYNC: results type: {type(results)}")
+        #print(f"DEBUG ASYNC: results length: {len(results) if hasattr(results, '__len__') else 'no len'}")
+        #if results and len(results) > 0:
+        #    print(f"DEBUG ASYNC: results[0] type: {type(results[0])}")
+        #    print(f"DEBUG ASYNC: results[0] content: {results[0]}")
+        #    if hasattr(results[0], '__len__') and len(results[0]) > 0:
+        #        print(f"DEBUG ASYNC: results[0][0] type: {type(results[0][0])}")
+        #        print(f"DEBUG ASYNC: results[0][0] content: {results[0][0]}")
+        
+        obs = [result[0] for result in results]
+        if isinstance(obs[0], np.ndarray):
+            return np.stack(obs)
+        else:
+            print(f"DEBUG: obs type: {type(obs)}")
+            print(f"DEBUG: obs length: {len(obs)}")
+            print(f"DEBUG: obs[0] type: {type(obs[0])}")
+            print(f"DEBUG: obs[0] content: {obs[0]}")
+            assert isinstance(obs[0], dict), f"Expected dict, got {type(obs[0])}"
+            return obs
+
 
     def reset_one_arg(self, env_ind, options=None):
         """

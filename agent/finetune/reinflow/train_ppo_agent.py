@@ -44,6 +44,11 @@ import pickle
 import wandb
 from util.reproducibility import set_seed_everywhere
 ########################################################################
+#appended by Dawei
+import csv
+import os
+from datetime import datetime
+########################################################################
 class TrainPPOAgent(TrainAgent):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -298,7 +303,8 @@ class TrainPPOAgent(TrainAgent):
         # set_seed_everywhere(self.seed)
         # Reset env before iteration starts (1) if specified, (2) at eval mode, or (3) right after eval mode
         if self.reset_at_iteration or self.eval_mode or self.last_itr_eval:
-            self.prev_obs_venv = self.reset_env_all(options_venv=self.options_venv)
+            self.prev_obs_venv = self.reset_env_all()
+            #self.prev_obs_venv = self.reset_env_all(options_venv=self.options_venv)
             self.buffer.firsts_trajs[0] = 1
         else:
             # if done at the end of last iteration, the envs are just reset
@@ -570,3 +576,28 @@ class TrainPPOAgent(TrainAgent):
                     )
             with open(self.result_path, "wb") as f:
                 pickle.dump(self.run_results, f)
+        
+            # CSV文件路径
+            csv_path = os.path.join(self.logdir, "training_metrics.csv")
+            
+            # 收集指标数据
+            mode = 'eval' if self.eval_mode else 'train'
+            row_data = {
+                'iteration': self.itr,
+                'total_env_steps': self.cnt_train_step,
+                'mode': mode,
+                'avg_episode_reward': round(getattr(self.buffer, 'avg_episode_reward', 0), 4),
+                'success_rate': round(getattr(self.buffer, 'success_rate', 0), 4),
+                'avg_best_reward': round(getattr(self.buffer, 'avg_best_reward', 0), 4),
+                'avg_episode_length': round(getattr(self.buffer, 'avg_episode_length', 0), 1),
+                'num_episodes': getattr(self.buffer, 'num_episode_finished', 0),
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            # 写入CSV文件
+            file_exists = os.path.exists(csv_path)
+            with open(csv_path, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=row_data.keys())
+                if not file_exists:
+                    writer.writeheader()
+                writer.writerow(row_data)

@@ -25,6 +25,7 @@ from .robomimic_lowdim import RobomimicLowdimWrapper
 from .robomimic_image import RobomimicImageWrapper
 from .d3il_lowdim import D3ilLowdimWrapper
 from .mujoco_locomotion_lowdim import MujocoLocomotionLowdimWrapper
+from .mikasa import FlattenRGBDObservationWrapper as MikasaWrapper
 
 
 wrapper_dict = {
@@ -33,4 +34,5 @@ wrapper_dict = {
     "robomimic_image": RobomimicImageWrapper,
     "d3il_lowdim": D3ilLowdimWrapper,
     "mujoco_locomotion_lowdim": MujocoLocomotionLowdimWrapper,
+    "mikasa": MikasaWrapper,
 }

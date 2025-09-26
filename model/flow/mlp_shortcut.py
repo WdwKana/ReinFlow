@@ -47,7 +47,7 @@
 # and revised by ReinFlow Authors and Collaborators.
 # The ShortCutFlowViT scipt is extended from Diffusion Policy Policy Optimization's implementation. 
 # NoisyShortCutFlowMLP and NoisyShortCutFlowViT are composed by ReinFlow Authors.
-
+  
 import torch
 import torch.nn as nn
 import numpy as np
@@ -187,7 +187,7 @@ class ShortCutFlowMLP(nn.Module):
         if save_chains:
             x_chain=torch.zeros((B, inference_steps+1, self.horizon_steps, self.action_dim), device=device)
         dt = (1 / inference_steps) * torch.ones_like(x_hat, device=device)
-        steps = torch.linspace(0, 1, inference_steps, device=device).repeat(B, 1)
+        steps = torch.linspace(0, 1-1/inference_steps, inference_steps, device=device).repeat(B, 1)
         for i in range(inference_steps):
             t = steps[:, i]
             dt_batch = (1 / inference_steps) * torch.ones(B, device=device)
@@ -467,7 +467,7 @@ class ShortCutFlowViT(nn.Module):
         if save_chains:
             x_chain=torch.zeros((B, inference_steps+1, self.horizon_steps, self.action_dim), device=device)
         dt = (1 / inference_steps) * torch.ones_like(x_hat, device=device)
-        steps = torch.linspace(0, 1, inference_steps, device=device).repeat(B, 1)
+        steps = torch.linspace(0, 1-1/inference_steps, inference_steps, device=device).repeat(B, 1)
         for i in range(inference_steps):
             t = steps[:, i]
             dt_batch=(1 / inference_steps)* torch.ones(B, device=device)

@@ -1,0 +1,105 @@
+_target_: agent.eval.eval_reflow_img_agent.EvalImgReFlowAgent
+name: RememberShapeAndColor3x2-v0_eval_reflow_mlp_img_ta4_td100
+logdir: /content/drive/Othercomputers/My Computer/ReinFlow/log/mikasa/eval/RememberShapeAndColor3x2-v0_eval_reflow_mlp_img_ta4_td100/2025-08-27_17-27-47_42
+base_policy_path: log/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-08-27_16-52-23_42/checkpoint/state_2000.pt
+load_ema: false
+seed: 42
+device: cuda:0
+env_name: RememberShapeAndColor3x2-v0
+obs_dim: 25
+action_dim: 8
+denoising_steps: 100
+cond_steps: 1
+img_cond_steps: 1
+horizon_steps: 4
+act_steps: 4
+denoising_step_list:
+- 1
+- 2
+- 4
+- 5
+- 8
+- 16
+- 32
+- 64
+- 128
+n_steps: 120
+render_num: 0
+batch_size: 128
+env:
+  env_type: mikasa
+  n_envs: 4
+  name: RememberShapeAndColor3x2-v0
+  best_reward_threshold_for_success: 1
+  max_episode_steps: 60
+  save_video: false
+  use_image_obs: true
+  wrappers:
+    mikasa:
+      rgb: true
+      depth: false
+      state: false
+      oracle: false
+      joints: true
+      target_camera: base_camera
+      clamp_obs: false
+    multi_step:
+      n_obs_steps: 1
+      n_action_steps: 4
+      max_episode_steps: 60
+      reset_within_step: true
+  render: true
+shape_meta:
+  obs:
+    rgb:
+      shape:
+      - 3
+      - 128
+      - 128
+    state:
+      shape:
+      - 25
+  action:
+    shape:
+    - 8
+model:
+  _target_: model.flow.reflow.ReFlow
+  network:
+    _target_: model.flow.mlp_flow.VisionFlowMLP
+    backbone:
+      _target_: model.common.vit.VitEncoder
+      obs_shape:
+      - 3
+      - 128
+      - 128
+      num_channel: 3
+      img_h: 128
+      img_w: 128
+      cfg:
+        patch_size: 8
+        depth: 1
+        embed_dim: 128
+        num_heads: 4
+        embed_style: embed2
+        embed_norm: 0
+    img_cond_steps: 1
+    augment: true
+    spatial_emb: 128
+    time_dim: 32
+    mlp_dims:
+    - 512
+    - 512
+    - 512
+    residual_style: true
+    cond_dim: 25
+    horizon_steps: 4
+    action_dim: 8
+  device: cuda:0
+  horizon_steps: 4
+  action_dim: 8
+  act_min: -1
+  act_max: 1
+  obs_dim: 25
+  max_denoising_steps: 100
+  seed: 42
+  sample_t_type: uniform

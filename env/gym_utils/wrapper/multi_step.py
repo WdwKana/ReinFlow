@@ -31,10 +31,11 @@ https://github.com/real-stanford/diffusion_policy/blob/main/diffusion_policy/gym
 TODO: allow cond_steps != img_cond_steps (should be implemented in training scripts, not here)
 """
 
-import gym
+import gymnasium as gym
 from typing import Optional
-from gym import spaces
+from gymnasium import spaces
 import numpy as np
+import torch
 from collections import defaultdict, deque
 
 
@@ -50,7 +51,7 @@ def repeated_box(box_space, n):
         dtype=box_space.dtype,
     )
 
-
+'''
 def repeated_space(space, n):
     if isinstance(space, spaces.Box):
         return repeated_box(space, n)
@@ -61,7 +62,21 @@ def repeated_space(space, n):
         return result_space
     else:
         raise RuntimeError(f"Unsupported space type {type(space)}")
-
+'''
+def repeated_space(space, n):
+    space_type_name = type(space).__name__
+    
+    # 检查是否为 Box 类型（支持 gym 和 gymnasium）
+    if space_type_name == 'Box':
+        return repeated_box(space, n)
+    # 检查是否为 Dict 类型（支持 gym 和 gymnasium）
+    elif space_type_name == 'Dict':
+        result_space = spaces.Dict()
+        for key, value in space.items():
+            result_space[key] = repeated_space(value, n)
+        return result_space
+    else:
+        raise RuntimeError(f"Unsupported space type {type(space)}")
 
 def take_last_n(x, n):
     x = list(x)
@@ -77,16 +92,16 @@ def dict_take_last_n(x, n):
 
 
 def aggregate(data, method="max"):
+    # Aggregate over time steps (axis=0), preserve per-env shape
+    arr = np.asarray(data)
     if method == "max":
-        # equivalent to any
-        return np.max(data)
+        return np.max(arr, axis=0)
     elif method == "min":
-        # equivalent to all
-        return np.min(data)
+        return np.min(arr, axis=0)
     elif method == "mean":
-        return np.mean(data)
+        return np.mean(arr, axis=0)
     elif method == "sum":
-        return np.sum(data)
+        return np.sum(arr, axis=0)
     else:
         raise NotImplementedError()
 
@@ -130,7 +145,7 @@ class MultiStep(gym.Wrapper):
         self.reset_within_step = reset_within_step
         self.pass_full_observations = pass_full_observations
         self.verbose = verbose
-
+    '''
     def reset(
         self,
         seed: Optional[int] = None,
@@ -155,77 +170,291 @@ class MultiStep(gym.Wrapper):
 
         self.cnt = 0
         return obs
+    '''
+    def reset(
+        self,
+        seed: Optional[int] = None,
+        return_info: bool = False,
+        options: dict = {},
+    ):
+        """Resets the environment."""
+        #print(f"DEBUG MultiStep: reset called with return_info={return_info}")
+        try:
+            result = self.env.reset(
+                seed=seed,
+                options=options,
+                #return_info=return_info,
+            )
+            print(f"DEBUG: env.reset() returned type: {type(result)}, content: {result}")  # 添加这行
 
+            #print(f"DEBUG MultiStep: env.reset returned type: {type(result)}")
+            #print(f"DEBUG MultiStep: env.reset result: {result}")
+            
+            # 处理gymnasium格式的返回值 (obs, info) 或者只有obs
+            if isinstance(result, tuple) and len(result) == 2:
+                obs, info = result
+                #print(f"DEBUG MultiStep: got tuple, obs type: {type(obs)}, info type: {type(info)}")
+            else:
+                obs = result
+                info = {}
+                #print(f"DEBUG MultiStep: got single value, obs type: {type(obs)}")
+            
+            #print(f"DEBUG MultiStep: final obs type: {type(obs)}")
+            #if isinstance(obs, dict):
+            #    print(f"DEBUG MultiStep: obs keys: {list(obs.keys())}")
+                
+        except Exception as e:
+            print(f"ERROR in MultiStep reset: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+        
+        self.obs = deque([obs], maxlen=max(self.n_obs_steps + 1, self.n_action_steps))
+        if self.prev_action:
+            self.action = deque(
+                [self._single_action_space.sample()], maxlen=self.n_obs_steps
+            )
+        self.reward = list()
+        self.done = list()
+        self.info = defaultdict(lambda: deque(maxlen=self.n_obs_steps + 1))
+        obs = self._get_obs(self.n_obs_steps)
+
+        self.cnt = 0
+        
+        if return_info:
+            return obs, info
+        else:
+            return obs
     def step(self, action):
         """
         actions: (n_action_steps,) + action_shape
         """
-        if action.ndim == 1:  # in case action_steps = 1
-            action = action[None]
-        truncated = False
-        terminated = False
+        # Normalize action layout to (T, N, D)
+        try:
+            import numpy as _np
+        except Exception:
+            import numpy as _np
+        # torch -> numpy
+        if hasattr(action, "detach") and hasattr(action, "cpu"):
+            try:
+                action = action.detach().cpu().numpy()
+            except Exception:
+                action = _np.array(action)
+        else:
+            action = _np.array(action)
+
+        # Now standardize shapes
+        # Expected per-time-step env action is (N, D) for vectorized env with N envs;
+        # We want action overall as (T, N, D)
+        if action.ndim == 1:  # (D,) -> (T=1, N=1, D)
+            action = action[_np.newaxis, _np.newaxis, :]
+        elif action.ndim == 2:
+            # Could be (T, D) for single env -> (T, 1, D)
+            # or (N, D) for single time step -> (1, N, D)
+            if action.shape[0] == self.n_action_steps:
+                action = action[:, _np.newaxis, :]
+            else:
+                action = action[_np.newaxis, :, :]
+        elif action.ndim == 3:
+            # Could be (T, N, D) or (N, T, D)
+            if action.shape[0] != self.n_action_steps and action.shape[1] == self.n_action_steps:
+                # (N, T, D) -> (T, N, D)
+                action = _np.swapaxes(action, 0, 1)
+            # else assume already (T, N, D)
+        first_step = True
+        agg_mask = None
+        agg_success = None
         for act_step, act in enumerate(action):
             self.cnt += 1
-            if terminated or truncated:
-                break
+            # Step vectorized env one chunk step - 处理 gymnasium 格式
+            result = self.env.step(act)
             
-            # done does not differentiate terminal and truncation
-            observation, reward, done, info = self.env.step(act)
+            if len(result) == 5:
+                # gymnasium 格式
+                observation, reward, terminated, truncated, info = result
+                
+                # 转换 tensor 为 numpy 以便后续处理
+                if isinstance(terminated, torch.Tensor):
+                    terminated = terminated.detach().cpu().numpy()
+                if isinstance(truncated, torch.Tensor):
+                    truncated = truncated.detach().cpu().numpy()
+                
+                done = np.logical_or(terminated, truncated)  # 现在可以安全合并
+            elif len(result) == 4:
+                # gym 格式
+                observation, reward, done, info = result
+                
+                # 确保 done 也是 numpy
+                if isinstance(done, torch.Tensor):
+                    done = done.detach().cpu().numpy()
+            else:
+                raise ValueError(f"Unexpected step result length: {len(result)}")
+
+            # 转换 reward 为 numpy 以便聚合
+            if isinstance(reward, torch.Tensor):
+                reward = reward.detach().cpu().numpy()
 
             self.obs.append(observation)
             self.action.append(act)
             self.reward.append(reward)
-            
-            # in gym, timelimit wrapper is automatically used given env._spec.max_episode_steps
-            if "TimeLimit.truncated" not in info:
-                if done:
-                    terminated = True
-                elif (
-                    self.max_episode_steps is not None
-                ) and self.cnt >= self.max_episode_steps:
-                    truncated = True
-            else:
-                truncated = info["TimeLimit.truncated"]
-                terminated = done
-            done = truncated or terminated
+            # done is per-env boolean array; just record it
             self.done.append(done)
             self._add_info(info)
+            
+            # 初始化聚合变量（首次循环时）
+            if first_step:
+                agg_mask = np.zeros_like(reward, dtype=bool)
+                agg_success = np.zeros_like(reward, dtype=bool)
+                first_step = False
+                
+            # 聚合 ManiSkill 的 final_info
+            if isinstance(info, dict) and 'final_info' in info:
+                mask = info.get('_final_info', None)
+                if isinstance(mask, torch.Tensor):
+                    mask = mask.detach().cpu().numpy().astype(bool)
+                if mask is not None:
+                    agg_mask = np.logical_or(agg_mask, mask)
+                    ep = info['final_info'].get('episode', {})
+                    succ = ep.get('success_at_end', ep.get('success_once', None))
+                    if succ is not None:
+                        if isinstance(succ, torch.Tensor):
+                            succ = succ.detach().cpu().numpy()
+                        succ = np.asarray(succ).astype(bool)
+                        agg_success[mask] = succ[mask]
+        
+        # 处理最终输出
         observation = self._get_obs(self.n_obs_steps)
         reward = aggregate(self.reward, self.reward_agg_method)
-        done = aggregate(self.done, "max") # spot any dones within action chunk 
-        info = dict_take_last_n(self.info, self.n_obs_steps)
+        done = aggregate(self.done, "max")
+        
+        # 保留最后一步的 info 结构，并添加聚合信息
+        info_out = info if isinstance(info, dict) else {}
+        
+        # 添加聚合的成功信息
+        if agg_success is not None:
+            info_out['success'] = agg_success
+            
+        # 更新 _final_info 为整个 chunk 的聚合
+        if agg_mask is not None and agg_mask.any():
+            info_out['_final_info'] = agg_mask
+        info = info_out
+        if self.pass_full_observations:
+            info_out["full_obs"] = self._get_obs(act_step + 1)
+        # Convert info to a list of per-env dicts (length = batch size)
+        # Determine batch size from observation
+        if isinstance(observation, dict):
+            sample_key = next(iter(observation))
+            obs_sample = observation[sample_key]
+        else:
+            obs_sample = observation
+        # obs_sample expected shape (B, T, ...)
+        B = obs_sample.shape[0] if hasattr(obs_sample, 'shape') and len(obs_sample.shape) > 0 else 1
+        '''
+        info_list = []
+        for b in range(B):
+            per_env = {}
+            for k, v in info.items():
+                # v is shape (T, ...) or (T,) of values; take the last time step
+                try:
+                    v_last = v[-1]
+                except Exception:
+                    v_last = v
+                # if v_last is per-env array/list, index by b
+                if hasattr(v_last, '__len__') and not isinstance(v_last, (str, bytes)):
+                    try:
+                        per_env[k] = v_last[b]
+                    except Exception:
+                        per_env[k] = v_last
+                else:
+                    per_env[k] = v_last
+            info_list.append(per_env)
+        info = info_list
         if self.pass_full_observations:
             info["full_obs"] = self._get_obs(act_step + 1)
-
-        # In mujoco case, done can happen within the loop above
-        if self.reset_within_step and self.done[-1]:
-
-            # need to save old observation in the case of truncation only, for bootstrapping
-            if truncated:
-                info["final_obs"] = observation
-
-            # reset
-            observation = (
-                self.reset()
-            )  # TODO: arguments? this cannot handle video recording right now since needs to pass in options
-            self.verbose and print("Reset env within wrapper.")
+        '''
+        # Optional: reset within step if any env is done (vectorized-safe)
+        if self.reset_within_step:
+            done_last = np.asarray(self.done[-1])
+            if done_last.any():
+                observation = self.reset()
+                self.verbose and print("Reset env within wrapper.")
 
         # reset reward and done for next step
         self.reward = list()
         self.done = list()
-        return observation, reward, terminated, truncated, info
+        # Ensure terminated/truncated are per-env boolean arrays
+        if isinstance(observation, dict):
+            sample_key = next(iter(observation))
+            obs_sample = observation[sample_key]
+        else:
+            obs_sample = observation
+        B = obs_sample.shape[0] if hasattr(obs_sample, 'shape') and len(obs_sample.shape) > 0 else 1
 
+        done_vec = done
+        if not isinstance(done_vec, np.ndarray):
+            done_vec = np.array([done_vec] * B, dtype=bool)
+        terminated_vec = done_vec.astype(bool)
+        truncated_vec = np.zeros_like(terminated_vec, dtype=bool)
+
+        # 确保terminated_vec反映真实的episode完成情况
+        if agg_mask is not None and agg_mask.any():
+            # 有episode真正完成时，使用聚合的mask作为terminated信号
+            terminated_vec = agg_mask.astype(bool)
+        else:
+            # 没有episode完成时，terminated为False
+            terminated_vec = np.zeros_like(done_vec, dtype=bool)
+            
+        # truncated保持原来的逻辑
+        truncated_vec = np.logical_and(done_vec, ~terminated_vec)
+
+        # Debug output for single env case
+        if len(terminated_vec) == 1:
+            has_success = False
+            success_val = 'N/A'
+            if info_out:
+                if isinstance(info_out, list) and len(info_out) > 0:
+                    has_success = 'success' in info_out[0]
+                    success_val = info_out[0].get('success', 'N/A') if has_success else 'N/A'
+                elif isinstance(info_out, dict):
+                    has_success = 'success' in info_out
+                    success_val = info_out.get('success', 'N/A') if has_success else 'N/A'
+            print(f"[CHK1] MultiStep.step return: terminated={terminated_vec[0]}, truncated={truncated_vec[0]}, has_success={has_success}, success={success_val}, info_type={type(info_out)}")
+
+        return observation, reward, terminated_vec, truncated_vec, info_out
+
+
+#change by Dawei for env
     def _get_obs(self, n_steps=1):
         """
         Output (n_steps,) + obs_shape
         """
         assert len(self.obs) > 0
+
+        #debug by Dawei Wang 2025-09-01
+        first_obs = self.obs[0]
+        print(f"DEBUG: _get_obs first_obs type: {type(first_obs)}")
         if isinstance(self.observation_space, spaces.Box):
-            return stack_last_n_obs(self.obs, n_steps)
+            #return stack_last_n_obs(self.obs, n_steps)
+            out = stack_last_n_obs(self.obs, n_steps)  # (T, ...) with batch inside obs shape
+            if out.ndim >= 2:
+                out = np.swapaxes(out, 0, 1)  # (T, B, ...) -> (B, T, ...)
+            return out
         elif isinstance(self.observation_space, spaces.Dict):
             result = dict()
-            for key in self.observation_space.keys():
-                result[key] = stack_last_n_obs([obs[key] for obs in self.obs], n_steps)
+            if isinstance(first_obs, dict):
+                actual_keys = first_obs.keys()
+            else:
+                print(f"ERROR: Expected dict, got {type(first_obs)}: {first_obs}")
+                raise RuntimeError(f"obs[0] should be dict, got {type(first_obs)}")
+            #use the actual keys from the obs changed by Dawei Wang 2025-09-01
+            #actual_keys = self.obs[0].keys() if isinstance(self.obs[0], dict) else self.observation_space.keys()
+            #for key in self.observation_space.keys():
+            for key in actual_keys:
+                out = stack_last_n_obs([obs[key] for obs in self.obs], n_steps)
+                if out.ndim >= 2:
+                    out = np.swapaxes(out, 0, 1)
+                #result[key] = stack_last_n_obs([obs[key] for obs in self.obs], n_steps)
+                result[key] = out
             return result
         else:
             raise RuntimeError("Unsupported space type")
@@ -235,11 +464,21 @@ class MultiStep(gym.Wrapper):
             n_steps = self.n_obs_steps - 1  # exclude current step
         assert len(self.action) > 0
         return stack_last_n_obs(self.action, n_steps)
-
+    '''
     def _add_info(self, info):
         for key, value in info.items():
             self.info[key].append(value)
-
+    '''
+    def _add_info(self, info):
+        for key, value in info.items():
+            # normalize tensors to numpy/python for safe numpy stacking
+            if hasattr(value, "detach") and hasattr(value, "cpu"):
+                try:
+                    value = value.detach().cpu()
+                    value = value.item() if value.ndim == 0 else value.numpy()
+                except Exception:
+                    value = value.detach().cpu().numpy()
+            self.info[key].append(value)
     def render(self, **kwargs):
         """Not the best design"""
         return self.env.render(**kwargs)

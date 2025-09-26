@@ -36,6 +36,7 @@ import wandb
 log = logging.getLogger(__name__)
 from env.gym_utils import make_async
 from util.reproducibility import set_seed_everywhere
+#from util.mikasa_csv_logger import MikasaMetricsCSVLogger
 class TrainAgent:        
     def __init__(self, cfg):
         super().__init__()
@@ -43,6 +44,20 @@ class TrainAgent:
         self.device = cfg.device
         self.seed=self.cfg.get('seed', 42)        
         set_seed_everywhere(self.seed)
+        '''
+        #CSV train_log
+        self.enable_csv_logging = cfg.train.get("enable_csv_logging", True)
+        if self.enable_csv_logging:
+            csv_filename = cfg.train.get("csv_filename", "training_metrics.csv")
+            self.csv_logger = MikasaMetricsCSVLogger(logdir=cfg.logdir,
+                                                      filename=csv_filename)
+            self.total_env_steps = 0
+            self.total_train_steps = 0
+            log.info(f"CSV logging enabled. Logging to {csv_filename}")
+        else:
+            self.csv_logger = None
+            log.info("CSV logging disabled.")
+        '''
         # Wandb       
         self.use_wandb = cfg.wandb is not None
         if self.use_wandb:
@@ -73,6 +88,7 @@ class TrainAgent:
         # Make vectorized env
         self.env_name = cfg.env.name
         env_type = cfg.env.get("env_type", None)
+        '''
         self.venv = make_async(
             cfg.env.name,
             env_type=env_type,
@@ -89,11 +105,46 @@ class TrainAgent:
             action_dim=cfg.action_dim,
             **cfg.env.specific if "specific" in cfg.env else {},
         )
+        '''
+
+        if env_type == "mikasa":
+            # 使用高效的 mikasa 环境创建
+            from env.gym_utils import make_mikasa_efficient
+            self.venv = make_mikasa_efficient(
+                env_name=cfg.env.name,
+                num_envs=cfg.env.n_envs,
+                wrappers=cfg.env.get("wrappers", None),
+                use_image_obs=cfg.env.get("use_image_obs", False),
+                max_episode_steps=cfg.env.max_episode_steps,
+                #seed=self.seed,
+                **cfg.env.get("specific", {})
+            )
+        else:
+            # 保持原有的通用环境创建方式
+            self.venv = make_async(
+                cfg.env.name,
+                env_type=env_type,
+                num_envs=cfg.env.n_envs,
+                asynchronous=True,
+                max_episode_steps=cfg.env.max_episode_steps,
+                wrappers=cfg.env.get("wrappers", None),
+                robomimic_env_cfg_path=cfg.get("robomimic_env_cfg_path", None),
+                shape_meta=cfg.get("shape_meta", None),
+                use_image_obs=cfg.env.get("use_image_obs", False),
+                render=cfg.env.get("render", False),
+                render_offscreen=cfg.env.get("save_video", False),
+                obs_dim=cfg.obs_dim,
+                action_dim=cfg.action_dim,
+                **cfg.env.specific if "specific" in cfg.env else {},
+            )
+        #changed by Dawei Wang 2025-09-01
+        '''        
         if not env_type == "furniture":
             self.venv.seed(
                 [self.seed + i for i in range(cfg.env.n_envs)]
             )  # otherwise parallel envs might have the same initial states!
             # isaacgym environments do not need seeding
+        '''        
         self.n_envs = cfg.env.n_envs
         self.n_cond_step = cfg.cond_steps
         self.obs_dim = cfg.obs_dim
@@ -152,8 +203,15 @@ class TrainAgent:
             if "plotter" in cfg.train
             else None
         )
-
-    
+        '''
+        # csv
+        if self.enable_csv_logging:
+            csv_filename = cfg.train.get("csv_filename", "training_metrics.csv")
+            self.csv_logger = MikasaMetricsCSVLogger(
+                logdir=self.logdir,
+                filename=csv_filename
+            )
+        '''
         
     def run(self):
         pass
@@ -179,7 +237,7 @@ class TrainAgent:
 
         self.itr = data["itr"]
         self.model.load_state_dict(data["model"])
-
+    '''
     def reset_env_all(self, verbose=False, options_venv=None, **kwargs):
         if options_venv is None:
             options_venv = [
@@ -198,7 +256,27 @@ class TrainAgent:
                     f"<-- Reset environment {index} with options {options_venv[index]}"
                 )
         return obs_venv
-
+    '''
+    #changed by Dawei Wang 2025-09-01
+    def reset_env_all(self, verbose=False, **kwargs):
+        print(f"DEBUG: Calling self.venv.reset() with kwargs: {kwargs}")
+        print(f"DEBUG: self.venv type: {type(self.venv)}")
+        
+        result = self.venv.reset(**kwargs)
+        
+        print(f"DEBUG: reset result type: {type(result)}")
+        print(f"DEBUG: reset result: {result}")
+        
+        if isinstance(result, tuple):
+            obs, info = result
+            print(f"DEBUG: obs type: {type(obs)}")
+            if isinstance(obs, dict):
+                print(f"DEBUG: obs keys: {list(obs.keys())}")
+            return obs
+        else:
+            print(f"DEBUG: returning result directly")
+            return result
+    
     def reset_env(self, env_ind, verbose=False):
         task = {}
         obs = self.venv.reset_one_arg(env_ind=env_ind, options=task)

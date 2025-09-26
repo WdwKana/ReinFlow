@@ -247,7 +247,7 @@ class PPOFlow(nn.Module):
         chains_vel  = torch.zeros_like(chains_prev, device=self.device)         # [batchsize, self.inference_steps, self.horizon_steps x self.action_dim]
 
         dt = 1.0/self.inference_steps
-        steps = torch.linspace(0, 1, self.inference_steps).repeat(B, 1).to(self.device)  # [batchsize, self.inference_steps]. the points sampled by linspace include the left and right boundaries. so we use 1-dt as the right boundary.  
+        steps = torch.linspace(0, 1-dt, self.inference_steps).repeat(B, 1).to(self.device)  # [batchsize, self.inference_steps]. the points sampled by linspace include the left and right boundaries. so we use 1-dt as the right boundary.  
         for i in range(self.inference_steps):
             t       = steps[:,i]
             xt      = x_chain[:,i]                                              # [batchsize, self.horizon_steps , self.action_dim]
@@ -327,7 +327,7 @@ class PPOFlow(nn.Module):
         # when doing deterministic sampling should calculate logprob again.
         B=cond["state"].shape[0]
         dt = (1/self.inference_steps)* torch.ones(B, self.horizon_steps, self.action_dim, device=self.device)
-        steps = torch.linspace(0,1,self.inference_steps).repeat(B, 1).to(self.device)  # [batchsize, num_steps]
+        steps = torch.linspace(0, 1-1/self.inference_steps,self.inference_steps).repeat(B, 1).to(self.device)  # [batchsize, num_steps]
         if save_chains:
             x_chain=torch.zeros((B, self.inference_steps+1, self.horizon_steps, self.action_dim), device=self.device)
         if ret_logprob:
@@ -393,7 +393,7 @@ class PPOFlow(nn.Module):
             if save_chains:
                 return (xt, x_chain)
             return xt
-    
+      
     
     def loss(
         self,

@@ -320,6 +320,7 @@ class EvalAgent:
         firsts_trajs[0] = 1
         reward_trajs = np.zeros((self.n_steps, self.n_envs))
         single_step_duration_list = np.zeros(self.n_steps)
+        success_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool)
         
         # Log message can remain as is
         log.info(f"Evaluating {self.model.__class__.__name__} model in {self.env_name} environment with {num_denoising_steps} step(s).")
@@ -346,6 +347,39 @@ class EvalAgent:
             obs_venv, reward_venv, terminated_venv, truncated_venv, info_venv = (
                 self.venv.step(action_venv)
             )
+            # add success by dawei
+            success_venv = []
+            for i, info in enumerate(info_venv):
+                if 'success' in info:
+                    success_val = info['success']
+                    if hasattr(success_val, 'item'):
+                        # 检查元素数量（兼容torch和numpy）
+                        if hasattr(success_val, 'numel'):
+                            # PyTorch tensor
+                            if success_val.numel() == 1:
+                                success_venv.append(bool(success_val.item()))
+                            else:
+                                success_venv.append(bool(success_val[i].item()))
+                        elif hasattr(success_val, 'size'):
+                            # NumPy array
+                            if success_val.size == 1:
+                                success_venv.append(bool(success_val.item()))
+                            else:
+                                success_venv.append(bool(success_val[i]))
+                        else:
+                            # 其他有.item()方法的对象
+                            try:
+                                success_venv.append(bool(success_val.item()))
+                            except:
+                                success_venv.append(bool(success_val[i]))
+                    else:
+                        # 如果没有.item()方法，直接转换
+                        success_venv.append(bool(success_val))
+                else:
+                    success_venv.append(False)
+            success_venv = np.array(success_venv)
+            success_trajs[step] = success_venv
+
             if self.render_onscreen:
                 self.venv.render(mode='human')
             if self.record_video:
@@ -399,10 +433,16 @@ class EvalAgent:
             avg_episode_reward_std = np.std(episode_reward)
             avg_best_reward = np.mean(episode_best_reward)
             avg_best_reward_std = np.std(episode_best_reward)
-            success_rate = np.mean(
-                episode_best_reward >= self.best_reward_threshold_for_success
-            )
-            success_rate_std = np.std(episode_best_reward >= self.best_reward_threshold_for_success)
+            #success_rate = np.mean(
+            #   episode_best_reward >= self.best_reward_threshold_for_success
+            #)
+            #success_rate_std = np.std(episode_best_reward >= self.best_reward_threshold_for_success)
+            episode_success = []
+            for env_ind, start, end in episodes_start_end:
+                #
+                episode_success.append(np.any(success_trajs[start:end + 1, env_ind]))
+            success_rate = np.mean(episode_success)
+            success_rate_std = np.std(np.array(episode_success).astype(float))
         else:
             episode_reward = np.array([])
             num_episodes_finished = 0

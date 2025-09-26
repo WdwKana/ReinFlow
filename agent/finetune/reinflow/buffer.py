@@ -183,9 +183,15 @@ class PPOBuffer:
     
     @torch.no_grad()
     def summarize_episode_reward(self):
+        print(f"[CHK3-DEBUG] summarize_episode_reward called: n_envs={self.n_envs}")
         episodes_start_end = []
         for env_ind in range(self.n_envs):
             env_steps = np.where(self.firsts_trajs[:, env_ind] == 1)[0]
+            # Debug output for single env case
+
+            terminated_count = np.sum(self.terminated_trajs[:, env_ind])
+            firsts_count = np.sum(self.firsts_trajs[:, env_ind])
+            print(f"[CHK3] Buffer episode detection: env_steps={env_steps}, terminated_count={terminated_count}, firsts_count={firsts_count}, firsts_shape={self.firsts_trajs.shape}")
             for i in range(len(env_steps) - 1):
                 start = env_steps[i]
                 end = env_steps[i + 1]
@@ -212,16 +218,24 @@ class PPOBuffer:
                 )
             self.avg_episode_reward = np.mean(episode_reward)
             self.avg_best_reward = np.mean(episode_best_reward)
-            self.success_rate = np.mean(
-                episode_best_reward >= self.best_reward_threshold_for_success
-            )
+            
+            #self.success_rate = np.mean(
+            #    episode_best_reward >= self.best_reward_threshold_for_success
+            #)
+            # use info success
+            episode_success = []
+            for env_ind, start, end in episodes_start_end:
+                # check if any step is successful in the episode
+                episode_success.append(np.any(self.success_trajs[start:end + 1, env_ind]))
+            self.success_rate = np.mean(episode_success)
+            self.std_success_rate = np.std(episode_success.astype(float))
             
             # Calculate standard deviations
             self.std_episode_reward = np.std(episode_reward)
             self.std_best_reward = np.std(episode_best_reward)
-            self.std_success_rate = np.std(
-                episode_best_reward >= self.best_reward_threshold_for_success
-            )
+            #self.std_success_rate = np.std(
+            #    episode_best_reward >= self.best_reward_threshold_for_success
+            #)
             
             # Calculate average length of valid episodes and its standard deviation
             episode_lengths = np.array([end - start + 1 for _, start, end in episodes_start_end])*self.act_steps # account for multiple steps
@@ -397,12 +411,18 @@ class PPODiffusionBufferGPU(PPODiffusionBuffer):
     # overload, for GPU version
     @torch.no_grad
     def summarize_episode_reward(self):
+        print(f"[CHK3-DEBUG] PPOFlowBufferGPU.summarize_episode_reward called: n_envs={self.n_envs}")
         episodes_start_end = []
         # Convert firsts_trajs to numpy for processing
         firsts_trajs_np = self.firsts_trajs.cpu().numpy()  
 
         for env_ind in range(self.n_envs):
             env_steps = np.where(firsts_trajs_np[:, env_ind] == 1)[0]
+            # Debug output
+            if env_ind == 0:  # Only print for first env to avoid spam
+                terminated_count = np.sum(self.terminated_trajs[:, env_ind].cpu().numpy())
+                firsts_count = np.sum(firsts_trajs_np[:, env_ind])
+                print(f"[CHK3] GPU Buffer episode detection: n_envs={self.n_envs}, env_steps={env_steps}, terminated_count={terminated_count}, firsts_count={firsts_count}, firsts_shape={firsts_trajs_np.shape}")
             for i in range(len(env_steps) - 1):
                 start = env_steps[i]
                 end = env_steps[i + 1]
@@ -432,15 +452,21 @@ class PPODiffusionBufferGPU(PPODiffusionBuffer):
             # Compute metrics
             self.avg_episode_reward = np.mean(episode_reward)
             self.avg_best_reward = np.mean(episode_best_reward)
-            self.success_rate = np.mean(
-                episode_best_reward >= self.best_reward_threshold_for_success
-            )
+            #self.success_rate = np.mean(
+            #    episode_best_reward >= self.best_reward_threshold_for_success
+            #)
+            episode_success = []
+            for env_ind, start, end in episodes_start_end:
+                # check if any step is successful in the episode
+                episode_success.append(torch.any(self.success_trajs[start:end + 1, env_ind]).cpu().numpy())
+            self.success_rate = np.mean(episode_success)
+            self.std_success_rate = np.std(np.array(episode_success).astype(float))
             # Calculate standard deviations
             self.std_episode_reward = np.std(episode_reward)
             self.std_best_reward = np.std(episode_best_reward)
-            self.std_success_rate = np.std(
-                episode_best_reward >= self.best_reward_threshold_for_success
-            )
+            #self.std_success_rate = np.std(
+            #    episode_best_reward >= self.best_reward_threshold_for_success
+            #)
             # Calculate average length of valid episodes and its standard deviation
             episode_lengths = np.array([end - start + 1 for _, start, end in episodes_start_end])*self.act_steps # account for multiple steps
             self.avg_episode_length = np.mean(episode_lengths)
@@ -709,7 +735,7 @@ class PPODiffusionImgBufferGPU(PPODiffusionBufferGPU):
         return obs, chains, returns, values, advantages, logprobs
     
     # bugfix: overload
-    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv):
+    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, success_venv): #add success by dawei
         # visual inputs: rgb, state
         for k in self.obs_trajs:
             self.obs_trajs[k][step] = torch.from_numpy(prev_obs_venv[k]).float().to(self.device)
@@ -717,6 +743,7 @@ class PPODiffusionImgBufferGPU(PPODiffusionBufferGPU):
         self.reward_trajs[step] = torch.from_numpy(reward_venv).float().to(self.device)
         self.terminated_trajs[step] = torch.from_numpy(terminated_venv).float().to(self.device)
         self.firsts_trajs[step + 1] = torch.from_numpy(terminated_venv | truncated_venv).float().to(self.device) # done_venv
+        self.success_trajs[step] = torch.from_numpy(success_venv).bool().to(self.device)
 
     # bugfix: overload 
     @torch.no_grad
@@ -762,6 +789,7 @@ class PPODiffusionImgBufferGPU(PPODiffusionBufferGPU):
             key: torch.from_numpy(obs_venv[key]).float().to(self.device)
             for key in self.obs_dim
         }
+        # possible fix: also add augmentation to the last obs used in GAE
         if self.fix_nextvalue_augment_bug and self.aug:
             rgb = obs_venv_ts["rgb"].flatten(0,1) # (e x t, C, H, W)
             rgb = self.aug(rgb)
@@ -922,10 +950,11 @@ class PPOFlowBufferGPU(PPOFlowBuffer):
 
         self.value_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.float32, device=self.device)
         self.logprobs_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.float32, device=self.device)
+        self.success_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.bool, device=self.device)
     
     
     # overload
-    def add(self, step, state_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, value_venv, logprob_venv):
+    def add(self, step, state_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, value_venv, logprob_venv, success_venv=None):
         self.obs_trajs["state"][step] = torch.from_numpy(state_venv).float().to(self.device)
         self.chains_trajs[step] = chains_actions_venv
         self.reward_trajs[step] = torch.from_numpy(reward_venv).float().to(self.device)
@@ -934,6 +963,8 @@ class PPOFlowBufferGPU(PPOFlowBuffer):
         
         self.value_trajs[step] = value_venv
         self.logprobs_trajs[step] = logprob_venv
+        if success_venv is not None:
+            self.success_trajs[step] = torch.from_numpy(success_venv).bool().to(self.device)
         
     # overload
     def make_dataset(self):
@@ -959,12 +990,18 @@ class PPOFlowBufferGPU(PPOFlowBuffer):
     # overload, for GPU version
     @torch.no_grad
     def summarize_episode_reward(self):
+        print(f"[CHK3-DEBUG] PPOFlowBufferGPU.summarize_episode_reward called: n_envs={self.n_envs}")
         episodes_start_end = []
         # Convert firsts_trajs to numpy for processing
         firsts_trajs_np = self.firsts_trajs.cpu().numpy()  
 
         for env_ind in range(self.n_envs):
             env_steps = np.where(firsts_trajs_np[:, env_ind] == 1)[0]
+            # Debug output
+            if env_ind == 0:  # Only print for first env to avoid spam
+                terminated_count = np.sum(self.terminated_trajs[:, env_ind].cpu().numpy())
+                firsts_count = np.sum(firsts_trajs_np[:, env_ind])
+                print(f"[CHK3] GPU Buffer episode detection: n_envs={self.n_envs}, env_steps={env_steps}, terminated_count={terminated_count}, firsts_count={firsts_count}, firsts_shape={firsts_trajs_np.shape}")
             for i in range(len(env_steps) - 1):
                 start = env_steps[i]
                 end = env_steps[i + 1]
@@ -994,15 +1031,21 @@ class PPOFlowBufferGPU(PPOFlowBuffer):
             # Compute metrics
             self.avg_episode_reward = np.mean(episode_reward)
             self.avg_best_reward = np.mean(episode_best_reward)
-            self.success_rate = np.mean(
-                episode_best_reward >= self.best_reward_threshold_for_success
-            )
+            #self.success_rate = np.mean(
+            #    episode_best_reward >= self.best_reward_threshold_for_success
+            #)
+            episode_success = []
+            for env_ind, start, end in episodes_start_end:
+                # check if any step is successful in the episode
+                episode_success.append(torch.any(self.success_trajs[start:end + 1, env_ind]).cpu().numpy())
+            self.success_rate = np.mean(episode_success)
+            self.std_success_rate = np.std(np.array(episode_success).astype(float))
             # Calculate standard deviations
             self.std_episode_reward = np.std(episode_reward)
             self.std_best_reward = np.std(episode_best_reward)
-            self.std_success_rate = np.std(
-                episode_best_reward >= self.best_reward_threshold_for_success
-            )
+            #self.std_success_rate = np.std(
+            #    episode_best_reward >= self.best_reward_threshold_for_success
+            #)
             # Calculate average length of valid episodes and its standard deviation
             episode_lengths = np.array([end - start + 1 for _, start, end in episodes_start_end])*self.act_steps # account for multiple steps
             self.avg_episode_length = np.mean(episode_lengths)
@@ -1083,9 +1126,10 @@ class PPOFlowImgBuffer(PPOFlowBuffer):
         
         self.value_trajs = np.empty((self.n_steps, self.n_envs))
         self.logprobs_trajs = np.zeros((self.n_steps, self.n_envs)) # flow diffusion difference
+        self.success_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool) # add success by dawei
     
     # overload. compute value and logprob only during updates, where they are computed on augmented samples. 
-    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv):
+    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, success_venv): #add success by dawei
         # visual inputs: rgb, state
         for k in self.obs_trajs:
             self.obs_trajs[k][step] = prev_obs_venv[k]
@@ -1094,6 +1138,11 @@ class PPOFlowImgBuffer(PPOFlowBuffer):
         self.reward_trajs[step] = reward_venv
         self.terminated_trajs[step] = terminated_venv
         self.firsts_trajs[step + 1] = terminated_venv | truncated_venv # done_venv
+        # add success info
+        if success_venv is not None:
+            if not hasattr(self, 'success_trajs'):
+                self.success_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool)
+            self.success_trajs[step] = success_venv
     
     # bugfix: overload 
     @torch.no_grad
@@ -1265,7 +1314,7 @@ class PPOFlowImgBufferGPU(PPOFlowBufferGPU):
 
         self.value_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.float32, device=self.device)
         self.logprobs_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.float32, device=self.device) # flow -diffusion differnce
-
+        self.success_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.bool, device=self.device) # add success by dawei
     # bugfix: overload
     def make_dataset(self):
         '''
@@ -1284,7 +1333,7 @@ class PPOFlowImgBufferGPU(PPOFlowBufferGPU):
         return obs, chains, returns, values, advantages, logprobs
     
     # bugfix: overload
-    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv):
+    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, success_venv): #add success by dawei
         # visual inputs: rgb, state
         for k in self.obs_trajs:
             self.obs_trajs[k][step] = torch.from_numpy(prev_obs_venv[k]).float().to(self.device)
@@ -1292,6 +1341,7 @@ class PPOFlowImgBufferGPU(PPOFlowBufferGPU):
         self.reward_trajs[step] = torch.from_numpy(reward_venv).float().to(self.device)
         self.terminated_trajs[step] = torch.from_numpy(terminated_venv).float().to(self.device)
         self.firsts_trajs[step + 1] = torch.from_numpy(terminated_venv | truncated_venv).float().to(self.device) # done_venv
+        self.success_trajs[step] = torch.from_numpy(success_venv).bool().to(self.device)
 
     # bugfix: overload 
     @torch.no_grad

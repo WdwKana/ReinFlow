@@ -27,6 +27,7 @@ Critic networks.
 
 from typing import Union
 import torch
+import torch.nn as nn
 import einops
 from copy import deepcopy
 
@@ -228,3 +229,72 @@ class ViTCritic(CriticObs):
             feat = self.compress.forward(feat, state)
         feat = torch.cat([feat, state], dim=-1)
         return super().forward(feat)
+
+class SlotAttentionCritic(CriticObs):
+    '''
+    critic newtwork with slot attention
+    '''
+    def __init__(
+        self,
+        backbone,
+        cond_dim,
+        #img_cond_steps = 1,
+        #spatial_emb = 128,
+        slot_feature_dim = None,
+        dropout = 0,
+        augment = False,
+        #num_img = 1,
+        **kwargs,
+    ):
+        if slot_feature_dim is None:
+            total_obs_dim = backbone.total_slot_dim+cond_dim
+            compress = None
+        else:
+            total_obs_dim = slot_feature_dim + cond_dim
+            #super().__init__(cond_dim=mlp_obs_dim, **kwargs)
+            #self.backbone = backbone
+            #self.num_img = num_img
+            #self.img_cond_steps = img_cond_steps
+            #slef.cond_dim = cond_dim
+            compress = nn.Sequential(
+                nn.Linear(total_obs_dim, slot_feature_dim),
+                nn.LayerNorm(slot_feature_dim),
+                nn.Dropout(dropout),
+                nn.ReLU(),
+            )
+        super().__init__(cond_dim=total_obs_dim, **kwargs)
+        self.backbone = backbone
+        self.cond_dim = cond_dim
+        self.compress = compress
+        self.augment = augment
+        if augment:
+            self.aug = RandomShiftsAug(pad=4)
+        self.augment = augment
+
+    def forward(
+        self,
+        cond: dict,
+        no_augment=False,
+    ):
+        """
+        cond: dict with key state/rgb; more recent obs at the end
+            state: (B, To, Do)
+            rgb: (B, To, C, H, W)
+        no_augment: whether to skip augmentation
+
+        TODO long term: more flexible handling of cond
+        """
+        B, T_rgb, C, H, W = cond["rgb"].shape
+        state = cond["state"].view(B, -1)
+        #rgb = cond["rgb"][:, -self.img_cond_steps :]
+        #rgb = einops.rearrange(rgb, 'b t c h w -> b (t c) h w')
+        rgb = cond["rgb"][:,-1]
+        
+        rgb = rgb.float()
+        if self.augment and not no_augment:
+            rgb = self.aug(rgb)
+        slot_feats = self.backbone(rgb,flatten=True) #(B, num_slots*hid_dim)
+        feat = self.compress(slot_feats)
+        feat = torch.cat([feat, state], dim=-1)
+        return super().forward(feat)
+    

@@ -27,6 +27,114 @@ try:
     from collections.abc import Iterable
 except ImportError:
     Iterable = (tuple, list)
+from mikasa_robo_suite.memory_envs import *
+
+
+def make_mikasa_efficient(
+    env_name: str,
+    num_envs: int = 1,
+    wrappers: dict = None,
+    use_image_obs: bool = False,
+    max_episode_steps: int = None,
+    #seed: int = None,
+    **kwargs
+):
+    """
+    高效的 Mikasa 环境创建函数，使用 ManiSkill 原生向量化
+    避免 AsyncVectorEnv 的进程开销，但保持所有现有 wrapper 不变
+    """
+    import gymnasium as gym
+    import mani_skill.envs
+    from mani_skill.utils.wrappers.flatten import FlattenActionSpaceWrapper
+    from mani_skill.vector.wrappers.gymnasium import ManiSkillVectorEnv
+    from env.gym_utils.wrapper.mikasa import FlattenRGBDObservationWrapper
+    from env.gym_utils.wrapper.multi_step import MultiStep
+    
+    # 直接创建向量化环境 - 这是关键优化点
+    mk_kwargs = dict(
+        obs_mode="rgb" if use_image_obs else "state",
+        render_mode=kwargs.get("render_mode", "all"),
+        sim_backend=kwargs.get("sim_backend", "gpu"),
+        num_envs=num_envs,  # 关键：直接在这里指定并行数量
+        **{k: v for k, v in kwargs.items() if k not in ['render_mode', 'sim_backend']}
+    )
+    #if seed is not None:
+    #    mk_kwargs['seed'] = seed
+    # 创建原生向量化环境
+    env = gym.make(env_name, **mk_kwargs)
+    
+    # 展平动作空间（保持原有逻辑）
+    if isinstance(env.action_space, gym.spaces.Dict):
+        env = FlattenActionSpaceWrapper(env)
+    
+    
+    # 应用现有的 mikasa wrapper（完全不变）
+    if wrappers and 'mikasa' in wrappers:
+        mikasa_wrapper_args = wrappers['mikasa']
+        env = FlattenRGBDObservationWrapper(env, **mikasa_wrapper_args)
+
+    env = ManiSkillVectorEnv(
+        env, 
+        num_envs=num_envs, 
+        ignore_terminations=True,   # 关键
+        record_metrics=True         # 关键
+    )
+    print(f"[CHK0] Environment setup: num_envs={num_envs}, ignore_terminations=True, record_metrics=True")
+    
+    # 应用现有的 multi_step wrapper（完全不变）
+    if wrappers and 'multi_step' in wrappers:
+        multi_step_args = wrappers['multi_step']
+        env = MultiStep(env, **multi_step_args)
+    
+
+    return env
+
+'''
+    # 添加必要的接口方法以保持兼容性
+    class CompatibleVectorEnv:
+        def __init__(self, env):
+            self.env = env
+            self.num_envs = num_envs
+            
+        def __getattr__(self, name):
+            return getattr(self.env, name)
+            
+        def seed(self, seeds):
+            """保持与原有 seed 接口兼容"""
+            if hasattr(self.env, 'seed'):
+                return self.env.seed(seeds)
+            return [None] * self.num_envs
+            
+        def reset_arg(self, options_list=None):
+            """保持与原有 reset_arg 接口兼容"""
+            if options_list is None:
+                options_list = [{}] * self.num_envs
+            
+            # 调用环境的reset方法
+            result = self.env.reset()
+            
+            # 处理可能的tuple返回值 (obs, info)
+            if isinstance(result, tuple) and len(result) == 2:
+                obs, info = result
+                return obs  # 只返回观察，忽略info
+            else:
+                return result  # 直接返回观察
+            
+        def reset_one_arg(self, env_ind, options=None):
+            """保持与原有 reset_one_arg 接口兼容"""
+            # 对于向量化环境，这个方法可能需要特殊处理
+            # 暂时返回全部重置的结果
+            result = self.env.reset()
+            
+            # 处理可能的tuple返回值 (obs, info)
+            if isinstance(result, tuple) and len(result) == 2:
+                obs, info = result
+                return obs  # 只返回观察，忽略info
+            else:
+                return result  # 直接返回观察
+    
+    return CompatibleVectorEnv(env)
+'''
 
 def make_async(
     env_name:str,
@@ -146,9 +254,14 @@ def make_async(
         import robomimic.utils.obs_utils as ObsUtils
     elif "avoiding" in env_name:
         import gym_avoiding
-    else:
+    elif env_type != "mikasa":
         import d4rl.gym_mujoco
+    #else:
+    #    import d4rl.gym_mujoco
     from gym.envs import make as make_
+
+
+
     
 
     
@@ -190,16 +303,45 @@ def make_async(
             # https://github.com/ARISE-Initiative/robosuite/blob/92abf5595eddb3a845cd1093703e5a3ccd01e77e/robosuite/environments/base.py#L247-L248
             env.env.hard_reset = False
         else:  # d3il, gym
-            if "kitchen" not in env_name:  # d4rl kitchen does not support rendering! use 
-                kwargs["render"] = render
-            
-            # print(f"environment id={id}")
-            if "Humanoid" in env_name:
-                print(f"make humanoid!")
-                env=make_('Humanoid-v3')
-            else: # gym, Franka Kitchen
-                print(f'Making gym environment id={env_name}')
-                env = make_(env_name, **kwargs)
+            if env_type == 'mikasa':
+                import gymnasium as gym
+                import mani_skill.envs
+                from mani_skill.utils.wrappers.flatten import FlattenActionSpaceWrapper
+                #from env.gym_utils.wrapper.mikasa import FlattenRGBDObservationWrapper
+                mk_kwargs = dict(
+                    obs_mode = "rgb" if use_image_obs else "state",
+                    render_mode = kwargs.get("render_mode", "all"),
+                    sim_backend = kwargs.get("sim_backend", "cpu")
+                )
+                env = gym.make(env_name, **mk_kwargs)
+                '''
+                env = FlattenRGBDObservationWrapper(env,
+                                                    rgb=use_image_obs,
+                                                    depth=False,state=False,
+                                                    oracle=False,
+                                                    joints = True,
+                                                    target_camera="base_camera",
+                                                    normalization_path=normalization_path)
+                '''
+                if isinstance(env.action_space, gym.spaces.Dict):
+                    env = FlattenActionSpaceWrapper(env)
+                '''
+                if wrappers is not None:
+                    for wrapper, args in wrappers.items():
+                        env = wrapper_dict[wrapper](env, **args)
+                return env
+                '''
+            else:
+                if "kitchen" not in env_name:  # d4rl kitchen does not support rendering! use 
+                    kwargs["render"] = render
+                
+                # print(f"environment id={id}")
+                if "Humanoid" in env_name:
+                    print(f"make humanoid!")
+                    env=make_('Humanoid-v3')
+                else: # gym, Franka Kitchen
+                    print(f'Making gym environment id={env_name}')
+                    env = make_(env_name, **kwargs)
         
         # add wrappers
         if wrappers is not None:
@@ -242,7 +384,7 @@ def make_async(
 
     def dummy_env_fn():
         """TODO(allenzren): does this dummy env allow camera obs for other envs besides robomimic?"""
-        import d4rl
+        #import d4rl
         import gym
         import numpy as np
         from env.gym_utils.wrapper.multi_step import MultiStep
@@ -257,9 +399,10 @@ def make_async(
             for key, value in shape_meta["obs"].items():
                 shape = value["shape"]
                 if key.endswith("rgb"):
-                    min_value, max_value = -1, 1
+                    min_value, max_value = 0, 255 # intial is -1, 1 change by dawei
                 elif key.endswith("state"):
-                    min_value, max_value = -1, 1
+                    #min_value, max_value = -1, 1 #initial
+                    min_value, max_value = -np.inf, np.inf
                 else:
                     raise RuntimeError(f"Unsupported type {key}")
                 observation_space[key] = spaces.Box(
@@ -270,8 +413,8 @@ def make_async(
                 )
         else:
             observation_space["state"] = gym.spaces.Box(
-                -1,
-                1,
+                -np.inf, #initial is -1 and 1
+                 np.inf,
                 shape=(obs_dim,),
                 dtype=np.float32,
             )
@@ -290,7 +433,8 @@ def make_async(
             dummy_env_fn=(
                 dummy_env_fn if render or render_offscreen or use_image_obs else None
             ),
-            delay_init="avoiding" in env_name,  # add delay for D3IL initialization
+            #delay_init="avoiding" in env_name,  # add delay for D3IL initialization
+            delay_init="avoiding" in env_name or "mikasa" in env_type,  # 为 mikasa 添加延迟
         )
         if asynchronous
         else SyncVectorEnv(env_fns)
