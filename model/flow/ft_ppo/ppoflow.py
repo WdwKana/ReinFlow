@@ -169,10 +169,10 @@ class PPOFlow(nn.Module):
             actor_network_data = {k.replace("network.", ""): v for k, v in model_data["model"].items()}
             if use_ema:
                 ema_actor_network_data = {k.replace("network.", ""): v for k, v in model_data["ema"].items()}
-                self.actor_old.load_state_dict(ema_actor_network_data)
+                self.actor_old.load_state_dict(ema_actor_network_data)#strict=False to allow partial loading added for slot attention
                 logging.info("Loaded ema actor policy from %s", network_path)
             else:
-                self.actor_old.load_state_dict(actor_network_data)
+                self.actor_old.load_state_dict(actor_network_data)#strict=False to allow partial loading added for slot attention
                 logging.info("Loaded actor policy from %s", network_path)
             print(f"actor_network_data={actor_network_data.keys()}")
         else:

@@ -165,6 +165,12 @@ class SlotAttentionAutoEncoder(nn.Module):
 
         self.fc1 = nn.Linear(hid_dim, hid_dim)
         self.fc2 = nn.Linear(hid_dim, hid_dim)
+        
+        # 添加固定的LayerNorm层
+        #self.encoder_layer_norm = nn.LayerNorm(hid_dim)
+        # 不训练这个LayerNorm的参数，保持随机初始化状态
+        #for param in self.encoder_layer_norm.parameters():
+        #    param.requires_grad = False
 
         self.slot_attention = SlotAttention(
             num_slots=self.num_slots,
@@ -179,6 +185,7 @@ class SlotAttentionAutoEncoder(nn.Module):
         # Convolutional encoder with position embedding.
         x = self.encoder_cnn(image)  # CNN Backbone.
         x = nn.LayerNorm(x.shape[1:]).to(device)(x)
+        #x = self.encoder_layer_norm(x)
         x = self.fc1(x)
         x = F.relu(x)
         x = self.fc2(x)  # Feedforward network on set.
@@ -230,6 +237,7 @@ class SlotAttentionEncoder(nn.Module):
         num_channel=3,
         img_h=128,
         img_w=128,
+        #skip_decoder=True,
     ):
         super().__init__()
         self.obs_shape = obs_shape
@@ -243,6 +251,7 @@ class SlotAttentionEncoder(nn.Module):
             num_slots=cfg.num_slots,
             num_iterations=cfg.num_iterations,
             hid_dim=cfg.hid_dim,
+            #skip_decoder=skip_decoder,
         )
         '''
         self.slot_attention_model.load_state_dict(torch.load(cfg.pretrained_path))
@@ -252,6 +261,7 @@ class SlotAttentionEncoder(nn.Module):
             print("Freezing encoder parameters")
 
 
+        '''
         '''
         if cfg.pretrained_path:
             try:
@@ -264,10 +274,29 @@ class SlotAttentionEncoder(nn.Module):
                 print("successfully loaded pretrained weights")
             except Exception as e:
                 print(f"Error loading pretrained weights: {e}")
+        '''
+        if cfg.pretrained_path:
+            try:
+                checkpoint = torch.load(cfg.pretrained_path, map_location='cpu')
+                if 'model_state_dict' in checkpoint:
+                    state_dict = checkpoint['model_state_dict']
+                else:
+                    state_dict = checkpoint
+                
+                # 使用strict=False允许部分加载
+                missing_keys, unexpected_keys = self.slot_attention_model.load_state_dict(state_dict, strict=False)
+                if missing_keys:
+                    print(f"Missing keys (will be randomly initialized): {missing_keys}")
+                print("Successfully loaded pretrained weights")
+            except Exception as e:
+                print(f"Error loading pretrained weights: {e}")
         if cfg.freeze_encoder:
-            for param in self.slot_attention_model.encoder_cnn.parameters():
+            #for param in self.slot_attention_model.encoder_cnn.parameters():
+            #    param.requires_grad = False
+            #print("Freezing encoder parameters")
+            for param in self.slot_attention_model.parameters():
                 param.requires_grad = False
-            print("Freezing encoder parameters")
+            print("Freezing slot attention model parameters")
         '''
         if cfg.use_slots_as_patches:
             # Treat each slot as a patch
@@ -298,7 +327,18 @@ class SlotAttentionEncoder(nn.Module):
             slot_representations: Tensor of shape (B, num_slots, repr_dim)
         '''
         obs = obs / 255.0
-        _, _, _, slots = self.slot_attention_model(obs)
+        #if self.slot_attention_model.skip_decoder:
+        # skip decoder
+        x = self.slot_attention_model.encoder_cnn(obs)
+        #x = self.layer_norm(x)
+        #x = self.slot_attention_model.encoder_layer_norm(x)
+        x = nn.LayerNorm(x.shape[1:]).to(device)(x)
+        x = self.slot_attention_model.fc1(x)
+        x = F.relu(x)
+        x = self.slot_attention_model.fc2(x)
+        slots = self.slot_attention_model.slot_attention(x)
+        #else:
+        #_, _, _, slots = self.slot_attention_model(obs)
 
         if flatten:
             slots = slots.flatten(1, 2) # (B, num_slots* hidden_dim)

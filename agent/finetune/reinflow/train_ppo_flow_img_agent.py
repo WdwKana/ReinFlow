@@ -57,7 +57,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
         
         self.buffer_device = self.device # 'cpu'
 
-        self.minibatch_duplicate_multiplier= 5    #self.ft_denoising_steps for robomimic
+        self.minibatch_duplicate_multiplier= 1    #self.ft_denoising_steps for robomimic
 
         self.skip_initial_eval =False
         

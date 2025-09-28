@@ -257,7 +257,7 @@ class SlotAttentionCritic(CriticObs):
             #self.img_cond_steps = img_cond_steps
             #slef.cond_dim = cond_dim
             compress = nn.Sequential(
-                nn.Linear(total_obs_dim, slot_feature_dim),
+                nn.Linear(backbone.total_slot_dim, slot_feature_dim),
                 nn.LayerNorm(slot_feature_dim),
                 nn.Dropout(dropout),
                 nn.ReLU(),
@@ -294,7 +294,8 @@ class SlotAttentionCritic(CriticObs):
         if self.augment and not no_augment:
             rgb = self.aug(rgb)
         slot_feats = self.backbone(rgb,flatten=True) #(B, num_slots*hid_dim)
-        feat = self.compress(slot_feats)
-        feat = torch.cat([feat, state], dim=-1)
+        if self.compress is not None:
+            slot_feats = self.compress(slot_feats)
+        feat = torch.cat([slot_feats, state], dim=-1)
         return super().forward(feat)
     

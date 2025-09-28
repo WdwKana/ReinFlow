@@ -35,7 +35,7 @@ max_std: 0.14
 
 env:
   env_type: mikasa 
-  n_envs: 100 #the intial one is 50
+  n_envs: 50 #the intial one is 50
   name: ${env_name}
   best_reward_threshold_for_success: 1
   max_episode_steps: 60
@@ -75,7 +75,7 @@ wandb:
   run: ${now:%Y-%m-%d}_${now:%H-%M-%S}_${name}
   offline_mode: false
 train:
-  n_train_itr: 41
+  n_train_itr: 161
   n_critic_warmup_itr: 4
   n_steps: 180
   gamma: 0.999
@@ -104,9 +104,9 @@ train:
   reward_scale_running: true
   reward_scale_const: 1.0
   gae_lambda: 0.95
-  batch_size: 1000
-  logprob_batch_size: 1000
-  update_epochs: 10
+  batch_size: 250
+  logprob_batch_size: 250
+  update_epochs: 2
   vf_coef: 0.5
   target_kl: 1e-2
   lr_schedule: fixed
