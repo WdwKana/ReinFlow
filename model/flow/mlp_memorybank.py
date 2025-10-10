@@ -363,7 +363,7 @@ class NoisyFlowMLP(nn.Module):
         if verbose:
             log.info(f"Set logprob noise levels. self.logprob_noise_levels={self.logprob_noise_levels}")
 
-class VisionFlowMLP(nn.Module):
+class VisionFlowMLPMembank(nn.Module):
     """With ViT backbone"""
     def __init__(
         self,
@@ -528,8 +528,40 @@ class VisionFlowMLP(nn.Module):
         elif self.num_img ==1:  # single image
             if self.augment:
                 rgb = self.aug(rgb)
-            feat = self.backbone.forward(rgb)
-            # compress
+            feat = self.backbone.forward(rgb)  # [B, P, E] patch tokens
+
+            # === Working Memory Integration ===
+            if 'wm' in cond and cond['wm'] is not None:
+                weights = cond['wm'].attend(feat)  # [B, P]
+                #feat = feat * weights.unsqueeze(-1)
+                # use attention weights for residual reweighting (keep the original way)
+                attended_feat = feat * weights.unsqueeze(-1)
+                feat = feat + 0.1 * attended_feat
+                
+                # write: memory-guided selective aggregation + confidence gate (automatically adapt to each phase)
+                cond['wm'].write(feat.detach())
+            '''   
+                phase_ids = cond.get('phase_ids', None)  # [B] tensor: 0=obs, 1=delay, 2=sel
+                
+                if phase_ids is not None:
+                    # vectorized processing: find the environment indices of each phase
+                    obs_mask = (phase_ids == 0)  # [B] bool
+                    sel_mask = (phase_ids == 2)  # [B] bool
+                    
+                    # Observation phase: batch write
+                    if obs_mask.any():
+                        cond['wm'].write(feat[obs_mask].detach())
+                    
+                    # Selection phase: batch attend
+                    if sel_mask.any():
+                        weights = cond['wm'].attend(feat[sel_mask])  # [num_sel, P]
+                        #feat[sel_mask] = feat[sel_mask] * weights.unsqueeze(-1)
+                        attended_feat = feat[sel_mask] * weights.unsqueeze(-1)
+                        feat[sel_mask] = feat[sel_mask] + 0.1 * attended_feat  # residual with small weights
+            '''        
+            # Delay phase: do nothing
+
+            # compress as before
             if isinstance(self.compress, SpatialEmb):
                 feat = self.compress.forward(feat, state)
             else:
@@ -553,10 +585,10 @@ class VisionFlowMLP(nn.Module):
         return vel.view(B, Ta, Da)
 
 
-class NoisyVisionFlowMLP(NoisyFlowMLP):
+class NoisyVisionFlowMLPMembank(NoisyFlowMLP):
     def __init__(
             self,
-            policy:VisionFlowMLP,
+            policy:VisionFlowMLPMembank,
             denoising_steps,
             learn_explore_noise_from,
             inital_noise_scheduler_type,
@@ -608,7 +640,7 @@ class NoisyVisionFlowMLP(NoisyFlowMLP):
         """
         B = action.shape[0]
         
-        self.policy: VisionFlowMLP
+        self.policy: VisionFlowMLPMembank
         vel, time_emb, cond_emb = self.policy.forward(action, time, cond, output_embedding=True)
         
         # noise head (for exploration). allow gradient flow.
