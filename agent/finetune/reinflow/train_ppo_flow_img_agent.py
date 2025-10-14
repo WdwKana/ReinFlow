@@ -209,16 +209,16 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                             success_venv[mask] = succ[mask]
                         
                         # Debug output for single env case
-                        if self.n_envs == 1:
-                            print(f"[CHK2] Success extraction: has_final_info={has_final_info}, mask={mask[0] if len(mask) > 0 else 'N/A'}, episode_keys={list(episode_info.keys())}, success_value={success_venv[0]}")
+                        #if self.n_envs == 1:
+                        #    print(f"[CHK2] Success extraction: has_final_info={has_final_info}, mask={mask[0] if len(mask) > 0 else 'N/A'}, episode_keys={list(episode_info.keys())}, success_value={success_venv[0]}")
                 else:
                     # Try direct success from info
                     if isinstance(info_venv, list) and len(info_venv) > 0 and 'success' in info_venv[0]:
                         success_venv[0] = info_venv[0]['success']
-                        if self.n_envs == 1:
-                            print(f"[CHK2] Success from direct info: success={success_venv[0]}")
-                    elif self.n_envs == 1:
-                        print(f"[CHK2] No success info found in info_venv structure")
+                        #if self.n_envs == 1:
+                        #    print(f"[CHK2] Success from direct info: success={success_venv[0]}")
+                    #elif self.n_envs == 1:
+                        #print(f"[CHK2] No success info found in info_venv structure")
 
                 # 使用环境返回的terminated信号（已经被MultiStep修复过）
                 self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, 
@@ -229,8 +229,8 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
             
             self.buffer.summarize_episode_reward()
             print(f"DEBUG: Episode统计 - 完成的episodes: {self.buffer.num_episode_finished}")
-            print(f"DEBUG: 实际的_final_info计数: {np.sum(info_venv.get('_final_info', np.zeros(self.n_envs)).astype(bool)) if isinstance(info_venv, dict) else 0}")
-            print(f"DEBUG: firsts_trajs中1的个数: {torch.sum(self.buffer.firsts_trajs).item()}")
+            #print(f"DEBUG: 实际的_final_info计数: {np.sum(info_venv.get('_final_info', np.zeros(self.n_envs)).astype(bool)) if isinstance(info_venv, dict) else 0}")
+            #print(f"DEBUG: firsts_trajs中1的个数: {torch.sum(self.buffer.firsts_trajs).item()}")
             if not self.eval_mode:
                 ### bug fix
                 self.buffer: PPOFlowImgBufferGPU

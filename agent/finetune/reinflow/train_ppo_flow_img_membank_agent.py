@@ -174,7 +174,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
             for step in tqdm(range(self.n_steps)) if self.verbose else range(self.n_steps):
                 if not self.verbose and step % 100 == 0: print(f"Processed {step} of {self.n_steps}")
                 with torch.no_grad():
-                    phase_ids = np.where(episode_steps < 5,0,np.where(episode_steps < 10,1,2))
+                    #phase_ids = np.where(episode_steps < 5,0,np.where(episode_steps < 10,1,2))
 
                     ####### visual input #########################
                     cond = {
@@ -184,7 +184,21 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                         for key in self.obs_dims
                     }
                     cond['wm'] = wm
-                    cond['phase_ids'] = torch.from_numpy(phase_ids).to(self.device)
+                    '''
+                    wm = wm.to(self.device)
+                    memory_params = list(wm.parameters())
+                    log.info(f"Adding {len(memory_params)} memory parameters to actor optimizer")
+                    log.info(f"Memory param shapes: {[p.shape for p in memory_params]}")
+                    
+                    # 重新创建优化器，包含记忆参数
+                    actor_params = list(self.model.actor_ft.parameters()) + memory_params
+                    self.actor_optimizer = torch.optim.AdamW(
+                        actor_params,
+                        lr=self.actor_lr,
+                        weight_decay=self.actor_weight_decay
+                    )
+                    '''
+                    #cond['phase_ids'] = torch.from_numpy(phase_ids).to(self.device)
                     ## overload bug fix
                     action_samples, chains_venv = self.get_samples(cond=cond, 
                                                                    ret_device=self.buffer_device,

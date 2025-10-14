@@ -418,7 +418,7 @@ class MultiStep(gym.Wrapper):
                 elif isinstance(info_out, dict):
                     has_success = 'success' in info_out
                     success_val = info_out.get('success', 'N/A') if has_success else 'N/A'
-            print(f"[CHK1] MultiStep.step return: terminated={terminated_vec[0]}, truncated={truncated_vec[0]}, has_success={has_success}, success={success_val}, info_type={type(info_out)}")
+            #print(f"[CHK1] MultiStep.step return: terminated={terminated_vec[0]}, truncated={truncated_vec[0]}, has_success={has_success}, success={success_val}, info_type={type(info_out)}")
 
         return observation, reward, terminated_vec, truncated_vec, info_out
 
@@ -432,7 +432,7 @@ class MultiStep(gym.Wrapper):
 
         #debug by Dawei Wang 2025-09-01
         first_obs = self.obs[0]
-        print(f"DEBUG: _get_obs first_obs type: {type(first_obs)}")
+        #print(f"DEBUG: _get_obs first_obs type: {type(first_obs)}")
         if isinstance(self.observation_space, spaces.Box):
             #return stack_last_n_obs(self.obs, n_steps)
             out = stack_last_n_obs(self.obs, n_steps)  # (T, ...) with batch inside obs shape
@@ -444,7 +444,7 @@ class MultiStep(gym.Wrapper):
             if isinstance(first_obs, dict):
                 actual_keys = first_obs.keys()
             else:
-                print(f"ERROR: Expected dict, got {type(first_obs)}: {first_obs}")
+                #print(f"ERROR: Expected dict, got {type(first_obs)}: {first_obs}")
                 raise RuntimeError(f"obs[0] should be dict, got {type(first_obs)}")
             #use the actual keys from the obs changed by Dawei Wang 2025-09-01
             #actual_keys = self.obs[0].keys() if isinstance(self.obs[0], dict) else self.observation_space.keys()

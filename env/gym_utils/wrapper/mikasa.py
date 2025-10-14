@@ -117,19 +117,19 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
                 cam_data = sensor_data[self.target_camera]
                 if self.include_rgb:
                     rgb_img = cam_data["rgb"]
-                    print(f"DEBUG: Original RGB shape: {rgb_img.shape}")
-                    print(f"DEBUG: Original RGB type: {type(rgb_img)}")
-                    print(f"DEBUG: RGB ndim: {rgb_img.ndim}")
+                    #print(f"DEBUG: Original RGB shape: {rgb_img.shape}")
+                    #print(f"DEBUG: Original RGB type: {type(rgb_img)}")
+                    #print(f"DEBUG: RGB ndim: {rgb_img.ndim}")
                     
                     if isinstance(rgb_img, torch.Tensor):
                         # 处理各种可能的维度情况
                         if rgb_img.ndim == 5:  # 向量化环境可能产生 (num_envs, 1, H, W, C)
-                            print(f"DEBUG: 5D tensor detected: {rgb_img.shape}")
+                            #print(f"DEBUG: 5D tensor detected: {rgb_img.shape}")
                             # 移除多余的维度
                             rgb_img = rgb_img.squeeze(1)  # → (num_envs, H, W, C)
                             rgb_img = rgb_img.permute(0, 3, 1, 2)  # → (num_envs, C, H, W)
                         elif rgb_img.ndim == 4:
-                            print(f"DEBUG: 4D tensor detected: {rgb_img.shape}")
+                            #print(f"DEBUG: 4D tensor detected: {rgb_img.shape}")
                             if rgb_img.shape[0] == 1 and rgb_img.shape[-1] in [3, 4]:  # (1, H, W, C)
                                 rgb_img = rgb_img.squeeze(0)  # → (H, W, C)
                                 rgb_img = rgb_img.permute(2, 0, 1)  # → (C, H, W)
@@ -137,17 +137,17 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
                                 rgb_img = rgb_img.permute(0, 3, 1, 2)  # → (num_envs, C, H, W)
                             # 如果已经是 (num_envs, C, H, W) 或 (1, C, H, W) 格式，不需要变换
                             elif rgb_img.shape[1] in [3, 4] and rgb_img.shape[1] < rgb_img.shape[2]:
-                                print(f"DEBUG: Already in (batch, C, H, W) format")
+                                #print(f"DEBUG: Already in (batch, C, H, W) format")
                                 pass  # 已经是正确格式
-                            else:
-                                print(f"DEBUG: Unexpected 4D shape: {rgb_img.shape}")
+                            #else:
+                                #print(f"DEBUG: Unexpected 4D shape: {rgb_img.shape}")
                         elif rgb_img.ndim == 3 and rgb_img.shape[-1] in [3, 4]:  # (H, W, C)
-                            print(f"DEBUG: 3D tensor detected: {rgb_img.shape}")
+                            #print(f"DEBUG: 3D tensor detected: {rgb_img.shape}")
                             rgb_img = rgb_img.permute(2, 0, 1)  # → (C, H, W)
-                        else:
-                            print(f"DEBUG: Unexpected RGB tensor shape: {rgb_img.shape}")
+                        #else:
+                            #print(f"DEBUG: Unexpected RGB tensor shape: {rgb_img.shape}")
                     
-                    print(f"DEBUG: Processed RGB shape: {rgb_img.shape}")
+                    #print(f"DEBUG: Processed RGB shape: {rgb_img.shape}")
                     images.append(rgb_img)
                 if self.include_depth:
                     depth_img = cam_data["depth"]
@@ -232,12 +232,12 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
         #print(f"Return is dict: {isinstance(ret, dict)}")
         #print(f"Return keys: {list(ret.keys()) if isinstance(ret, dict) else 'N/A'}")
         
-        print(f"DEBUG: Before numpy conversion:")
-        for key, value in ret.items():
-            if isinstance(value, torch.Tensor):
-                print(f"  {key}: shape {value.shape}, dtype {value.dtype}")
-            else:
-                print(f"  {key}: type {type(value)}")
+        #print(f"DEBUG: Before numpy conversion:")
+        #for key, value in ret.items():
+            #if isinstance(value, torch.Tensor):
+                #print(f"  {key}: shape {value.shape}, dtype {value.dtype}")
+            #else:
+                #print(f"  {key}: type {type(value)}")
 
         for key, value in ret.items():
             if isinstance(value, torch.Tensor):
@@ -253,12 +253,12 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
                 converted = value.detach().cpu().numpy().astype(np.float32)
                 ret[key] = converted
 
-        print(f"DEBUG: After numpy conversion:")
-        for key, value in ret.items():
-            if isinstance(value, np.ndarray):
-                print(f"  {key}: shape {value.shape}, dtype {value.dtype}")
-            else:
-                print(f"  {key}: type {type(value)}")
+        #print(f"DEBUG: After numpy conversion:")
+        #for key, value in ret.items():
+        #    if isinstance(value, np.ndarray):
+        #        print(f"  {key}: shape {value.shape}, dtype {value.dtype}")
+        #    else:
+        #       print(f"  {key}: type {type(value)}")
 
         return ret
     
