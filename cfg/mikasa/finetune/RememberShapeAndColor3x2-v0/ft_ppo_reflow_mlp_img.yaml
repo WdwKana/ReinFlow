@@ -19,11 +19,14 @@ hydra:
 _target_: agent.finetune.reinflow.train_ppo_flow_img_agent.TrainPPOImgFlowAgent
 name: ${env_name}_ft_reflow_mlp_img_ta${horizon_steps}_td${denoising_steps}_tdf${ft_denoising_steps}_seed${seed}
 logdir: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/${env_name}_ft_reflow_mlp_img_ta${horizon_steps}_td${denoising_steps}_tdf${ft_denoising_steps}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-08-27_12-33-05_42/checkpoint/state_2000.pt
-#robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}-img.json
-normalization_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/${env_name}/normalization.npz
+base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-01_09-20-30_42/checkpoint/state_2000.pt # tanh
 
-seed: 42
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-10-30_02-21-35_42/checkpoint/state_2000.pt #collect data with action clip
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-10-24_00-17-11_42/checkpoint/state_2000.pt
+#robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}-img.json
+#normalization_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/${env_name}/normalization.npz
+
+seed: 33
 device: cuda:0
 
 #########################
@@ -75,7 +78,7 @@ wandb:
   run: ${now:%Y-%m-%d}_${now:%H-%M-%S}_${name}
   offline_mode: false
 train:
-  n_train_itr: 201
+  n_train_itr: 121
   n_critic_warmup_itr: 4
   n_steps: 180
   gamma: 0.999
@@ -95,8 +98,8 @@ train:
     first_cycle_steps: 200
     warmup_steps: 5
     min_lr: 3e-4
-  save_model_freq: 100
-  val_freq: 10
+  save_model_freq: 30
+  val_freq: 5
   render:
     freq: 1
     num: 0

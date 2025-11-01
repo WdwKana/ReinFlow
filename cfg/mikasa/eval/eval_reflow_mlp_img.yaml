@@ -3,37 +3,44 @@ defaults:
 hydra:
   run:
     dir: ${logdir}
-_target_: agent.eval.eval_reflow_img_agent.EvalImgReFlowAgent
+_target_: agent.eval.eval_reflow_mikasa_agent.EvalReFlowMikasaAgent
 
 name: ${env_name}_eval_reflow_mlp_img_ta${horizon_steps}_td${denoising_steps}
 logdir: 
   ${oc.env:REINFLOW_LOG_DIR}/mikasa/eval/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/${env_name}/ReFlow/state_2000.pt
+base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberColor9-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-24_09-32-50_42/checkpoint/best.pt
 
-load_ema: true
+load_ema: False
 seed: 42
 device: cuda:0
 env_name: RememberShapeAndColor3x2-v0
 obs_dim: 25
 action_dim: 8
 denoising_steps: 100
-cond_steps: 4
-img_cond_steps: 4
+cond_steps: 1
+img_cond_steps: 1
 horizon_steps: 4
 act_steps: 4
-denoising_step_list: [1, 2, 4, 5, 8, 16, 32, 64, 128]
+denoising_step_list: [5]
 
-n_steps: 120  # each episode takes max_episode_steps / act_steps steps
-render_num: 0
+n_steps: 300  # each episode takes max_episode_steps / act_steps steps
+render_num: 1
 batch_size: 128
+
+record_video: true
+frame_width: 640
+frame_height: 480
+record_env_index: 0
 
 env:
   env_type: mikasa  # 关键：指定mikasa环境类型
-  n_envs: 4
+  n_envs: 16
   name: ${env_name}
+  save_video: true
+  use_custom_video: true
+  video_dir: ${logdir}/videos # where to save the videos
   best_reward_threshold_for_success: 1
   max_episode_steps: 60
-  save_video: false
   use_image_obs: true
   wrappers:
     mikasa:  # 使用mikasa wrapper替代robomimic_image
@@ -45,6 +52,14 @@ env:
       target_camera: "base_camera"
       # normalization_path: null  # 没有normalization文件，设为null或完全省略
       clamp_obs: false
+    render_step_info:
+      {} # empty dict means no kwargs
+    render_reward_info:
+      {}
+    #render_target_info:
+    #  _target_: mikasa_robo_suite.utils.wrappers.RenderTargetInfoWrapper
+    remember_color_info:
+      {}
     multi_step:
       n_obs_steps: ${cond_steps}
       n_action_steps: ${act_steps}
@@ -79,7 +94,7 @@ model:
         embed_style: embed2
         embed_norm: 0
     img_cond_steps: ${img_cond_steps}
-    augment: true
+    augment: false
     spatial_emb: 128
     time_dim: 32
     mlp_dims: [512, 512, 512]

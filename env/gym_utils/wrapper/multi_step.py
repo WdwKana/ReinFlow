@@ -304,7 +304,8 @@ class MultiStep(gym.Wrapper):
             # 初始化聚合变量（首次循环时）
             if first_step:
                 agg_mask = np.zeros_like(reward, dtype=bool)
-                agg_success = np.zeros_like(reward, dtype=bool)
+                agg_success_once = np.zeros_like(reward, dtype=bool)
+                agg_success_at_end = np.zeros_like(reward, dtype=bool)
                 first_step = False
                 
             # 聚合 ManiSkill 的 final_info
@@ -315,12 +316,19 @@ class MultiStep(gym.Wrapper):
                 if mask is not None:
                     agg_mask = np.logical_or(agg_mask, mask)
                     ep = info['final_info'].get('episode', {})
-                    succ = ep.get('success_at_end', ep.get('success_once', None))
-                    if succ is not None:
-                        if isinstance(succ, torch.Tensor):
-                            succ = succ.detach().cpu().numpy()
-                        succ = np.asarray(succ).astype(bool)
-                        agg_success[mask] = succ[mask]
+                    #succ = ep.get('success_at_end', ep.get('success_once', None))
+                    succ_once = ep.get('success_once', None)
+                    if succ_once is not None:
+                        if isinstance(succ_once, torch.Tensor):
+                            succ_once = succ_once.detach().cpu().numpy()
+                        succ_once = np.asarray(succ_once).astype(bool)
+                        agg_success_once[mask] = succ_once[mask]
+                    succ_at_end = ep.get('success_at_end', None)
+                    if succ_at_end is not None:
+                        if isinstance(succ_at_end, torch.Tensor):
+                            succ_at_end = succ_at_end.detach().cpu().numpy()
+                        succ_at_end = np.asarray(succ_at_end).astype(bool)
+                        agg_success_at_end[mask] = succ_at_end[mask]
         
         # 处理最终输出
         observation = self._get_obs(self.n_obs_steps)
@@ -331,8 +339,10 @@ class MultiStep(gym.Wrapper):
         info_out = info if isinstance(info, dict) else {}
         
         # 添加聚合的成功信息
-        if agg_success is not None:
-            info_out['success'] = agg_success
+        if agg_success_once is not None:
+            info_out['success_once'] = agg_success_once
+        if agg_success_at_end is not None:
+            info_out['success_at_end'] = agg_success_at_end
             
         # 更新 _final_info 为整个 chunk 的聚合
         if agg_mask is not None and agg_mask.any():

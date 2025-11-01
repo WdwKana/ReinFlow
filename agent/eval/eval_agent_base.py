@@ -383,6 +383,7 @@ class EvalAgent:
             if self.render_onscreen:
                 self.venv.render(mode='human')
             if self.record_video:
+                
                 if 'kitchen' in self.env_name.lower(): # Kitchen
                     raise ValueError(f"Cannot record video for kitchen environments with the current setup. self.env_name={self.env_name}") # For kitchen environments, we render with the sim.render method, as D4RL kitchen does not support the standard render method.
                 else: # gym or robomimic or d3il

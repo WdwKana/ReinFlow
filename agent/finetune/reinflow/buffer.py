@@ -1034,12 +1034,23 @@ class PPOFlowBufferGPU(PPOFlowBuffer):
             #self.success_rate = np.mean(
             #    episode_best_reward >= self.best_reward_threshold_for_success
             #)
-            episode_success = []
-            for env_ind, start, end in episodes_start_end:
+            #episode_success = []
+            #for env_ind, start, end in episodes_start_end:
                 # check if any step is successful in the episode
-                episode_success.append(torch.any(self.success_trajs[start:end + 1, env_ind]).cpu().numpy())
-            self.success_rate = np.mean(episode_success)
-            self.std_success_rate = np.std(np.array(episode_success).astype(float))
+                #episode_success.append(torch.any(self.success_trajs[start:end + 1, env_ind]).cpu().numpy())
+            #self.success_rate = np.mean(episode_success)
+            #self.std_success_rate = np.std(np.array(episode_success).astype(float))
+            episode_success_once = []
+            episode_success_at_end = []
+            for env_ind, start, end in episodes_start_end:
+                episode_success_once.append(torch.any(self.success_once_trajs[start:end + 1, env_ind]).cpu().numpy())
+                episode_success_at_end.append(torch.any(self.success_at_end_trajs[start:end + 1, env_ind]).cpu().numpy())
+            self.success_rate_once = np.mean(episode_success_once)
+            self.std_success_rate_once = np.std(np.array(episode_success_once).astype(float))
+            self.success_rate_at_end = np.mean(episode_success_at_end)
+            self.std_success_rate_at_end = np.std(np.array(episode_success_at_end).astype(float))
+            self.success_rate = self.success_rate_once
+            self.std_success_rate = self.std_success_rate_once
             # Calculate standard deviations
             self.std_episode_reward = np.std(episode_reward)
             self.std_best_reward = np.std(episode_best_reward)
@@ -1058,11 +1069,15 @@ class PPOFlowBufferGPU(PPOFlowBuffer):
             self.std_episode_reward = 0
             self.avg_best_reward = 0
             self.std_best_reward = 0
+            self.success_rate_once = 0
+            self.std_success_rate_once = 0
+            self.success_rate_at_end = 0
+            self.std_success_rate_at_end = 0
             self.success_rate = 0
-            self.std_success_rate = 0
             self.avg_episode_length = 0
             self.std_episode_length = 0
             log.info("[WARNING] No episode completed within the iteration!")
+            self.std_success_rate = 0
 
 # revised
 class PPOFlowImgBuffer(PPOFlowBuffer):
@@ -1126,10 +1141,11 @@ class PPOFlowImgBuffer(PPOFlowBuffer):
         
         self.value_trajs = np.empty((self.n_steps, self.n_envs))
         self.logprobs_trajs = np.zeros((self.n_steps, self.n_envs)) # flow diffusion difference
-        self.success_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool) # add success by dawei
-    
+        #self.success_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool) # add success by dawei
+        self.success_once_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool) # add success by dawei
+        self.success_at_end_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool) # add success by dawei
     # overload. compute value and logprob only during updates, where they are computed on augmented samples. 
-    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, success_venv): #add success by dawei
+    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, success_once_venv, success_at_end_venv): #add success by dawei
         # visual inputs: rgb, state
         for k in self.obs_trajs:
             self.obs_trajs[k][step] = prev_obs_venv[k]
@@ -1139,11 +1155,12 @@ class PPOFlowImgBuffer(PPOFlowBuffer):
         self.terminated_trajs[step] = terminated_venv
         self.firsts_trajs[step + 1] = terminated_venv | truncated_venv # done_venv
         # add success info
-        if success_venv is not None:
-            if not hasattr(self, 'success_trajs'):
-                self.success_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool)
-            self.success_trajs[step] = success_venv
-    
+        #if success_venv is not None:
+        #    if not hasattr(self, 'success_trajs'):
+        #        self.success_trajs = np.zeros((self.n_steps, self.n_envs), dtype=bool)
+        #    self.success_trajs[step] = success_venv
+        self.success_once_trajs[step] = success_once_venv
+        self.success_at_end_trajs[step] = success_at_end_venv
     # bugfix: overload 
     @torch.no_grad
     def update_img(self, obs_venv:dict, model:PPOFlow):
@@ -1314,7 +1331,12 @@ class PPOFlowImgBufferGPU(PPOFlowBufferGPU):
 
         self.value_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.float32, device=self.device)
         self.logprobs_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.float32, device=self.device) # flow -diffusion differnce
-        self.success_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.bool, device=self.device) # add success by dawei
+        #self.success_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.bool, device=self.device) # add success by dawei
+        self.success_once_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.bool, device=self.device) # add success by dawei
+        self.success_at_end_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.bool, device=self.device) # add success by dawei
+        self.episode_return_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.float32, device=self.device) # add episode return by dawei
+        self.episode_length_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.int32, device=self.device) # add episode length by dawei
+        self.episode_finished_mask_trajs = torch.zeros((self.n_steps, self.n_envs), dtype=torch.bool, device=self.device) # add episode finished mask by dawei
     # bugfix: overload
     def make_dataset(self):
         '''
@@ -1333,7 +1355,7 @@ class PPOFlowImgBufferGPU(PPOFlowBufferGPU):
         return obs, chains, returns, values, advantages, logprobs
     
     # bugfix: overload
-    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, success_venv): #add success by dawei
+    def add(self, step, prev_obs_venv, chains_actions_venv, reward_venv, terminated_venv, truncated_venv, success_once_venv, success_at_end_venv, episode_return_venv, episode_length_venv, episode_finished_mask_venv): #add success by dawei
         # visual inputs: rgb, state
         for k in self.obs_trajs:
             self.obs_trajs[k][step] = torch.from_numpy(prev_obs_venv[k]).float().to(self.device)
@@ -1341,8 +1363,15 @@ class PPOFlowImgBufferGPU(PPOFlowBufferGPU):
         self.reward_trajs[step] = torch.from_numpy(reward_venv).float().to(self.device)
         self.terminated_trajs[step] = torch.from_numpy(terminated_venv).float().to(self.device)
         self.firsts_trajs[step + 1] = torch.from_numpy(terminated_venv | truncated_venv).float().to(self.device) # done_venv
-        self.success_trajs[step] = torch.from_numpy(success_venv).bool().to(self.device)
-
+        #self.success_trajs[step] = torch.from_numpy(success_venv).bool().to(self.device)
+        self.success_once_trajs[step] = torch.from_numpy(success_once_venv).bool().to(self.device)
+        self.episode_return_trajs[step] = torch.from_numpy(episode_return_venv).float().to(self.device)
+        self.success_at_end_trajs[step] = torch.from_numpy(success_at_end_venv).bool().to(self.device)
+        #self.episode_return_trajs[step] = torch.from_numpy(reward_venv).float().to(self.device)
+        #self.episode_length_trajs[step] = torch.from_numpy(terminated_venv | truncated_venv).float().to(self.device)
+        #self.episode_finished_mask_trajs[step] = torch.from_numpy(terminated_venv | truncated_venv).bool().to(self.device)
+        self.episode_length_trajs[step] = torch.from_numpy(episode_length_venv).int().to(self.device)
+        self.episode_finished_mask_trajs[step] = torch.from_numpy(episode_finished_mask_venv).bool().to(self.device)
     # bugfix: overload 
     @torch.no_grad
     def update_img(self, obs_venv:dict, model:PPOFlow):
@@ -1426,4 +1455,51 @@ class PPOFlowImgBufferGPU(PPOFlowBufferGPU):
             )
         # compute return
         self.returns_trajs = self.advantages_trajs + self.value_trajs
+    @torch.no_grad()
+    def summarize_episode_reward(self):
+        print(f"[CHK3-DEBUG] PPOFlowImgBufferGPU.summarize_episode_reward called: n_envs={self.n_envs}")
+
+        finished_steps, finished_envs = torch.where(self.episode_finished_mask_trajs)
+        num_finished = finished_steps.numel()
+
+        if num_finished == 0:
+            self.num_episode_finished = 0
+            self.avg_episode_reward = 0.0
+            self.std_episode_reward = 0.0
+            self.avg_best_reward = 0.0
+            self.std_best_reward = 0.0
+            self.success_rate_once = 0.0
+            self.std_success_rate_once = 0.0
+            self.success_rate_at_end = 0.0
+            self.std_success_rate_at_end = 0.0
+            self.success_rate = 0.0
+            self.std_success_rate = 0.0
+            self.avg_episode_length = 0.0
+            self.std_episode_length = 0.0
+            log.info("[WARNING] No episode completed within the iteration!")
+            return
+
+        rewards = self.episode_return_trajs[finished_steps, finished_envs].detach().cpu().numpy()
+        lengths = self.episode_length_trajs[finished_steps, finished_envs].detach().cpu().numpy()
+        success_once = self.success_once_trajs[finished_steps, finished_envs].detach().cpu().numpy().astype(np.float32)
+        success_end = self.success_at_end_trajs[finished_steps, finished_envs].detach().cpu().numpy().astype(np.float32)
+
+        self.num_episode_finished = int(num_finished)
+        self.avg_episode_reward = float(np.mean(rewards))
+        self.std_episode_reward = float(np.std(rewards))
+        self.avg_best_reward = self.avg_episode_reward
+        self.std_best_reward = self.std_episode_reward
+
+        self.avg_episode_length = float(np.mean(lengths))
+        self.std_episode_length = float(np.std(lengths))
+
+        self.success_rate_once = float(np.mean(success_once))
+        self.std_success_rate_once = float(np.std(success_once))
+        self.success_rate_at_end = float(np.mean(success_end))
+        self.std_success_rate_at_end = float(np.std(success_end))
+
+        self.success_rate = self.success_rate_once
+        self.std_success_rate = self.std_success_rate_once
+
+        print(f"[INFO] use {self.num_episode_finished} episodes to calculate metrics")
 

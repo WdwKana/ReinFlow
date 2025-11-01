@@ -192,7 +192,11 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                 
                 # add success info
                 # 从info中提取成功信息
-                success_venv = np.zeros(self.n_envs, dtype=bool)
+                success_once_venv = np.zeros(self.n_envs, dtype=bool)
+                success_at_end_venv = np.zeros(self.n_envs, dtype=bool)
+                episode_return_venv = np.zeros(self.n_envs, dtype=float)
+                episode_length_venv = np.zeros(self.n_envs, dtype=int)
+                episode_finished_mask_venv = np.zeros(self.n_envs, dtype=bool)
                 has_final_info = isinstance(info_venv, dict) and '_final_info' in info_venv
                 if has_final_info:
                     mask = info_venv['_final_info']
@@ -200,21 +204,41 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                         mask = mask.detach().cpu().numpy().astype(bool)
                     
                     if mask.any():  # 有episode完成
+                        episode_return_venv[mask] = reward_venv[mask]
+                        episode_finished_mask_venv[mask] = True
                         final_info = info_venv.get('final_info', {})
                         episode_info = final_info.get('episode', {})
-                        succ = episode_info.get('success_at_end', episode_info.get('success_once', None))
-                        if succ is not None:
-                            if isinstance(succ, torch.Tensor):
-                                succ = succ.detach().cpu().numpy().astype(bool)
-                            success_venv[mask] = succ[mask]
+                        print(list(episode_info.keys()))
+                        #succ = episode_info.get('success_at_end', episode_info.get('success_once', None))
+                        succ_once = episode_info.get('success_once', None)
+                        ep_return = episode_info.get('return', None)
+                        ep_length = episode_info.get('episode_len', None)
+                        if succ_once is not None:
+                            if isinstance(succ_once, torch.Tensor):
+                                succ_once = succ_once.detach().cpu().numpy().astype(bool)
+                            success_once_venv[mask] = succ_once[mask]
+                        succ_at_end = episode_info.get('success_at_end', None)
+                        if succ_at_end is not None:
+                            if isinstance(succ_at_end, torch.Tensor):
+                                succ_at_end = succ_at_end.detach().cpu().numpy().astype(bool)
+                            success_at_end_venv[mask] = succ_at_end[mask]
+                        if ep_return is not None:
+                            if isinstance(ep_return, torch.Tensor):
+                                ep_return = ep_return.detach().cpu().numpy().astype(float)
+                            episode_return_venv[mask] = ep_return[mask]
+                        if ep_length is not None:
+                            if isinstance(ep_length, torch.Tensor):
+                                ep_length = ep_length.detach().cpu().numpy().astype(int)
+                            episode_length_venv[mask] = ep_length[mask]
                         
                         # Debug output for single env case
                         #if self.n_envs == 1:
                         #    print(f"[CHK2] Success extraction: has_final_info={has_final_info}, mask={mask[0] if len(mask) > 0 else 'N/A'}, episode_keys={list(episode_info.keys())}, success_value={success_venv[0]}")
                 else:
                     # Try direct success from info
-                    if isinstance(info_venv, list) and len(info_venv) > 0 and 'success' in info_venv[0]:
-                        success_venv[0] = info_venv[0]['success']
+                    if isinstance(info_venv, list) and len(info_venv) > 0:
+                        success_once_venv[0] = info_venv[0]['success_once']
+                        success_at_end_venv[0] = info_venv[0]['success_at_end']
                         #if self.n_envs == 1:
                         #    print(f"[CHK2] Success from direct info: success={success_venv[0]}")
                     #elif self.n_envs == 1:
@@ -222,7 +246,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
 
                 # 使用环境返回的terminated信号（已经被MultiStep修复过）
                 self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, 
-                                terminated_venv, truncated_venv, success_venv)
+                                terminated_venv, truncated_venv, success_once_venv, success_at_end_venv, episode_return_venv, episode_length_venv, episode_finished_mask_venv)
                 
                 self.prev_obs_venv = obs_venv
                 self.cnt_train_step+= self.n_envs * self.act_steps if not self.eval_mode else 0

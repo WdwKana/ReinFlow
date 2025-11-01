@@ -103,7 +103,7 @@ train_dataset:
   use_img: true
   dataset_path: ${train_dataset_path}
   horizon_steps: ${horizon_steps}
-  max_n_episodes: 100
+  max_n_episodes: 600
   cond_steps: ${cond_steps}
   img_cond_steps: ${img_cond_steps}
   device: ${device}

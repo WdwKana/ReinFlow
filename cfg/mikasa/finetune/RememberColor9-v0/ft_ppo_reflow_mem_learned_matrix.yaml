@@ -1,0 +1,209 @@
+################################
+env_suite: mikasa
+env_name: RememberColor9-v0
+
+obs_dim: 25
+cond_steps: 1
+img_cond_steps: 1
+
+action_dim: 8
+horizon_steps: 4
+act_steps: 4
+################################
+
+defaults:
+  - _self_
+hydra:
+  run:
+    dir: ${logdir}
+
+# ✅ 修改 1: 使用新的 agent
+_target_: agent.finetune.reinflow.train_ppo_flow_img_mem_learned_1_agent.TrainPPOImgFlowAgent
+
+name: ${env_name}_ft_reflow_mem_learned_matrix_ta${horizon_steps}_td${denoising_steps}_tdf${ft_denoising_steps}_seed${seed}
+logdir: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/${env_name}_ft_reflow_mem_learned_matrix_ta${horizon_steps}_td${denoising_steps}_tdf${ft_denoising_steps}_topk${topk}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
+base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberColor9-v0/RememberColor9-v0_pre_reflow_mlp_img_ta4_td100/2025-10-24_02-03-45_42/checkpoint/state_2000.pt
+
+#normalization_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/${env_name}/normalization.npz
+
+seed: 42
+device: cuda:0
+
+#########################
+denoising_steps: 5
+ft_denoising_steps: 5
+min_std: 0.08
+max_std: 0.14
+#########################
+
+env:
+  env_type: mikasa 
+  n_envs: 200
+  name: ${env_name}
+  best_reward_threshold_for_success: 1
+  max_episode_steps: 60
+  save_video: false
+  use_image_obs: true
+  sim_backend: gpu
+  render_mode: all
+  wrappers:
+    mikasa:
+      rgb: ${env.use_image_obs}
+      depth: false
+      state: false
+      oracle: false
+      joints: true
+      target_camera: base_camera
+      clamp_obs: false
+    multi_step:
+      n_obs_steps: ${cond_steps}
+      n_action_steps: ${act_steps}
+      max_episode_steps: ${env.max_episode_steps}
+      reset_within_step: true
+
+shape_meta:
+  obs:
+    rgb:
+      shape: [3, 128, 128]
+    state:
+      shape: [25]
+  action: 
+    shape: [8]
+
+wandb:
+  entity: ${oc.env:REINFLOW_WANDB_ENTITY}
+  project: mikasa-${env_name}-mem_learned_matrix-finetune  # 改个名字区分
+  run: ${now:%Y-%m-%d}_${now:%H-%M-%S}_${name}
+  offline_mode: false
+
+train:
+  n_train_itr: 121
+  n_critic_warmup_itr: 4
+  n_steps: 180
+  gamma: 0.999
+  augment: true
+  grad_accumulate: 15
+  
+  # ✅ 修改 2: 降低学习率以应对分布偏移
+  actor_lr: 2e-5  # 从 2e-5 降到 1e-5
+  actor_weight_decay: 0
+  actor_lr_scheduler:
+    type: cosine
+    first_cycle_steps: 200
+    warmup_steps: 5
+    min_lr: 1e-5  # 对应降低
+    
+  critic_lr: 6.5e-4
+  critic_weight_decay: 0
+  critic_lr_scheduler:
+    type: cosine
+    first_cycle_steps: 200
+    warmup_steps: 5
+    min_lr: 3e-4
+    
+  save_model_freq: 30
+  val_freq: 5
+  render:
+    freq: 1
+    num: 0
+    
+  # PPO specific
+  reward_scale_running: true
+  reward_scale_const: 1.0
+  gae_lambda: 0.95
+  batch_size: 1000
+  logprob_batch_size: 1000
+  update_epochs: 10
+  vf_coef: 0.5
+  target_kl: 1e-2
+  lr_schedule: fixed
+  repeat_samples: true
+  verbose: false
+  clip_intermediate_actions: true
+  account_for_initial_stochasticity: true
+
+model:
+  _target_: model.flow.ft_ppo.ppoflow.PPOFlow
+  device: ${device}
+  actor_policy_path: ${base_policy_path}
+  
+  policy:
+    # ✅ 修改 3: 使用 memory bank 版本的 policy
+    _target_: model.flow.mlp_memorybank.VisionFlowMLPMembank
+    
+    backbone:
+      _target_: model.common.vit.VitEncoder
+      obs_shape: ${shape_meta.obs.rgb.shape}
+      num_channel: ${eval:'3 * ${img_cond_steps}'}
+      img_h: ${shape_meta.obs.rgb.shape[1]}
+      img_w: ${shape_meta.obs.rgb.shape[2]}
+      cfg:
+        patch_size: 8
+        depth: 1
+        embed_dim: 128  # ✅ 这个值要和 agent 中的 wm embed_dim 一致
+        num_heads: 4
+        embed_style: embed2
+        embed_norm: 0
+        
+    augment: false
+    spatial_emb: 128
+    time_dim: 32
+    mlp_dims: [512, 512, 512]
+    residual_style: true
+    img_cond_steps: ${img_cond_steps}
+    cond_dim: ${eval:'${obs_dim} * ${cond_steps}'}
+    horizon_steps: ${horizon_steps}
+    action_dim: ${action_dim}
+    
+  critic:
+    _target_: model.common.critic.ViTCritic
+    spatial_emb: 128
+    augment: false
+    backbone:
+      _target_: model.common.vit.VitEncoder
+      obs_shape: ${shape_meta.obs.rgb.shape}
+      num_channel: ${eval:'3 * ${img_cond_steps}'}
+      img_h: ${shape_meta.obs.rgb.shape[1]}
+      img_w: ${shape_meta.obs.rgb.shape[2]}
+      cfg:
+        patch_size: 8
+        depth: 1
+        embed_dim: 128
+        num_heads: 4
+        embed_style: embed2
+        embed_norm: 0
+    img_cond_steps: ${img_cond_steps}
+    mlp_dims: [256, 256, 256]
+    activation_type: Mish
+    residual_style: true
+    cond_dim: ${eval:'${obs_dim} * ${cond_steps}'}
+    
+  act_dim: ${action_dim}
+  horizon_steps: ${horizon_steps}
+  act_min: -1
+  act_max: 1
+  obs_dim: ${obs_dim}
+  cond_steps: ${cond_steps}
+  noise_scheduler_type: learn
+  inference_steps: ${denoising_steps}
+  ft_denoising_steps: ${ft_denoising_steps}
+  randn_clip_value: 3
+  min_sampling_denoising_std: ${min_std}
+  min_logprob_denoising_std: ${min_std}
+  max_logprob_denoising_std: ${max_std}
+  logprob_min: -1.0
+  logprob_max: 1.0
+  
+  clip_ploss_coef: 0.01
+  clip_ploss_coef_base: 0.001
+  clip_ploss_coef_rate: 3
+  clip_vloss_coef: null
+  denoised_clip_value: 1.0
+  
+  time_dim_explore: 0
+  learn_explore_time_embedding: false
+  use_time_independent_noise: true
+  noise_hidden_dims: [256,256,256]
+  logprob_debug_sample: false
+  logprob_debug_recalculate: false
+  explore_net_activation_type: Tanh

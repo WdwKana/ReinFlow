@@ -159,7 +159,8 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
         self.prepare_run()
         self.buffer.reset() # as long as we put items at the right position in the buffer (determined by 'step'), the buffer automatically resets when new iteration begins (step =0). so we only need to reset in the beginning. This works only for PPO buffer, otherwise may need to reset when new iter begins.
         from model.common.working_memory import WorkingMemory
-        wm = WorkingMemory(embed_dim=128, ema=0.9, temperature=0.07, normalize=True, device=self.device)
+        #from model.common.learned_memory import LearnedWorkingMemoryLite
+        wm = WorkingMemory(embed_dim=128,ema=0.9, temperature=0.07, normalize=True, device=self.device)
         episode_steps = np.zeros(self.n_envs, dtype=np.int32)
         if self.resume:
             self.resume_training()

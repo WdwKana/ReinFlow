@@ -1,0 +1,93 @@
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/cuda/__init__.py:54: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/sapien/_vulkan_tricks.py:37: UserWarning: Failed to find Vulkan ICD file. This is probably due to an incorrect or partial installation of the NVIDIA driver. SAPIEN will attempt to provide an ICD file anyway but it may not work.
+  warn(
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.5
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/gymnasium/core.py:311: UserWarning: [33mWARN: env.device to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.device` for environment variables or `env.get_wrapper_attr('device')` that will search the reminding wrappers.[0m
+  logger.warn(
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/gymnasium/core.py:311: UserWarning: [33mWARN: env.update_obs_space to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.update_obs_space` for environment variables or `env.get_wrapper_attr('update_obs_space')` that will search the reminding wrappers.[0m
+  logger.warn(
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/cuda/__init__.py:54: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/sapien/_vulkan_tricks.py:37: UserWarning: Failed to find Vulkan ICD file. This is probably due to an incorrect or partial installation of the NVIDIA driver. SAPIEN will attempt to provide an ICD file anyway but it may not work.
+  warn(
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.5
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/gymnasium/core.py:311: UserWarning: [33mWARN: env.device to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.device` for environment variables or `env.get_wrapper_attr('device')` that will search the reminding wrappers.[0m
+  logger.warn(
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/gymnasium/core.py:311: UserWarning: [33mWARN: env.update_obs_space to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.update_obs_space` for environment variables or `env.get_wrapper_attr('update_obs_space')` that will search the reminding wrappers.[0m
+  logger.warn(
+Error executing job with overrides: ['seed=33', 'wandb.offline_mode=true']
+Traceback (most recent call last):
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 92, in _call_target
+    return _target_(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/s4176650/ReinFlow/model/flow/ft_ppo/ppoflow.py", line 120, in __init__
+    self.load_policy(actor_policy_path, use_ema=True)  # it was false for previous experiments for hopper walker halfcheetah
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/s4176650/ReinFlow/model/flow/ft_ppo/ppoflow.py", line 171, in load_policy
+    ema_actor_network_data = {k.replace("network.", ""): v for k, v in model_data["ema"].items()}
+                                                                       ~~~~~~~~~~^^^^^^^
+KeyError: 'ema'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/local/s4176650/ReinFlow/script/run.py", line 151, in <module>
+    main()
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 223, in run_and_report
+    raise ex
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/hydra.py", line 132, in run
+    _ = ret.return_value
+        ^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/s4176650/ReinFlow/script/run.py", line 146, in main
+    agent = cls(cfg)
+            ^^^^^^^^
+  File "/local/s4176650/ReinFlow/agent/finetune/reinflow/train_ppo_flow_img_mem_learned_1_agent.py", line 41, in __init__
+    super().__init__(cfg)
+  File "/local/s4176650/ReinFlow/agent/finetune/reinflow/train_ppo_flow_agent.py", line 49, in __init__
+    super().__init__(cfg)
+  File "/local/s4176650/ReinFlow/agent/finetune/reinflow/train_ppo_agent.py", line 54, in __init__
+    super().__init__(cfg)
+  File "/local/s4176650/ReinFlow/agent/finetune/reinflow/train_agent.py", line 167, in __init__
+    self.model = hydra.utils.instantiate(cfg.model)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 226, in instantiate
+    return instantiate_node(
+           ^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 347, in instantiate_node
+    return _call_target(_target_, partial, args, kwargs, full_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 97, in _call_target
+    raise InstantiationException(msg) from e
+hydra.errors.InstantiationException: Error in call to target 'model.flow.ft_ppo.ppoflow.PPOFlow':
+KeyError('ema')
+full_key: model

@@ -529,7 +529,7 @@ class VisionFlowMLPMembank(nn.Module):
             if self.augment:
                 rgb = self.aug(rgb)
             feat = self.backbone.forward(rgb)  # [B, P, E] patch tokens
-
+            '''
             # === Working Memory Integration ===
             if 'wm' in cond and cond['wm'] is not None:
                 weights = cond['wm'].attend(feat)  # [B, P]
@@ -540,6 +540,11 @@ class VisionFlowMLPMembank(nn.Module):
                 
                 # write: memory-guided selective aggregation + confidence gate (automatically adapt to each phase)
                 cond['wm'].write(feat.detach())
+            '''
+            if 'wm' in cond and cond['wm'] is not None:
+                # enhanced_feat, attn = cond['wm'](feat, return_weights=True)
+                feat = cond['wm'](feat)  # read and write and return enhanced patch representation
+                #feat = feat + 0.1 * att_feat 
             '''   
                 phase_ids = cond.get('phase_ids', None)  # [B] tensor: 0=obs, 1=delay, 2=sel
                 

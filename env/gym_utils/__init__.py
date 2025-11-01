@@ -28,6 +28,7 @@ try:
 except ImportError:
     Iterable = (tuple, list)
 from mikasa_robo_suite.memory_envs import *
+from mani_skill.utils.wrappers.record import RecordEpisode
 
 
 def make_mikasa_efficient(
@@ -39,10 +40,12 @@ def make_mikasa_efficient(
     #seed: int = None,
     **kwargs
 ):
-    """
-    高效的 Mikasa 环境创建函数，使用 ManiSkill 原生向量化
-    避免 AsyncVectorEnv 的进程开销，但保持所有现有 wrapper 不变
-    """
+    save_video = kwargs.pop("save_video", False)
+    video_dir = kwargs.pop("video_dir", None)
+    video_fps = kwargs.pop("video_fps", 30)
+    save_trajectory = kwargs.pop("save_trajectory", False)
+    save_video_trigger = kwargs.pop("save_video_trigger", None)
+
     import gymnasium as gym
     import mani_skill.envs
     from mani_skill.utils.wrappers.flatten import FlattenActionSpaceWrapper
@@ -50,38 +53,74 @@ def make_mikasa_efficient(
     from env.gym_utils.wrapper.mikasa import FlattenRGBDObservationWrapper
     from env.gym_utils.wrapper.multi_step import MultiStep
     
-    # 直接创建向量化环境 - 这是关键优化点
     mk_kwargs = dict(
         obs_mode="rgb" if use_image_obs else "state",
         render_mode=kwargs.get("render_mode", "all"),
         sim_backend=kwargs.get("sim_backend", "gpu"),
-        num_envs=num_envs,  # 关键：直接在这里指定并行数量
+        num_envs=num_envs,
         **{k: v for k, v in kwargs.items() if k not in ['render_mode', 'sim_backend']}
     )
     #if seed is not None:
     #    mk_kwargs['seed'] = seed
-    # 创建原生向量化环境
     env = gym.make(env_name, **mk_kwargs)
     
-    # 展平动作空间（保持原有逻辑）
     if isinstance(env.action_space, gym.spaces.Dict):
         env = FlattenActionSpaceWrapper(env)
     
     
-    # 应用现有的 mikasa wrapper（完全不变）
+    
     if wrappers and 'mikasa' in wrappers:
         mikasa_wrapper_args = wrappers['mikasa']
         env = FlattenRGBDObservationWrapper(env, **mikasa_wrapper_args)
+    from mikasa_robo_suite.utils import wrappers as mikasa_wrappers_mod
+    ...
+
+    extra_wrapper_map = {
+        "render_step_info": mikasa_wrappers_mod.RenderStepInfoWrapper,
+        "render_reward_info": mikasa_wrappers_mod.RenderRewardInfoWrapper,
+        #"render_target_info": mikasa_wrappers_mod.RenderTargetInfoWrapper,
+        "remember_shape_and_color_info": mikasa_wrappers_mod.RememberShapeAndColorInfoWrapper,
+        "remember_color_info": mikasa_wrappers_mod.RememberColorInfoWrapper,
+        "remember_shape_info": mikasa_wrappers_mod.RememberShapeInfoWrapper,
+        
+    }
+
+    if wrappers:
+        for name, cfg in wrappers.items():
+            if name in ("mikasa", "multi_step"):
+                continue
+            wrapper_cls = extra_wrapper_map.get(name)
+            if wrapper_cls is None:
+                raise KeyError(f"Unknown Mikasa wrapper '{name}' in config.")
+            wrapper_kwargs = cfg or {}
+            env = wrapper_cls(env, **wrapper_kwargs)
+    
+    if save_video:
+        if video_dir is None:
+            video_dir = os.path.join(os.getcwd(), "videos")
+        os.makedirs(video_dir, exist_ok=True)
+
+        record_kwargs = dict(
+            output_dir=video_dir,
+            save_trajectory=save_trajectory,
+            trajectory_name="trajectory",
+            max_steps_per_video=max_episode_steps or 0,
+            video_fps=video_fps,
+        )
+        if save_video_trigger is not None:
+            record_kwargs["save_video_trigger"] = save_video_trigger
+
+        if not kwargs.get("use_custom_video", False):
+            env = RecordEpisode(env, **record_kwargs)
 
     env = ManiSkillVectorEnv(
         env, 
         num_envs=num_envs, 
-        ignore_terminations=True,   # 关键
-        record_metrics=True         # 关键
+        ignore_terminations=True,
+        record_metrics=True
     )
     print(f"[CHK0] Environment setup: num_envs={num_envs}, ignore_terminations=True, record_metrics=True")
-    
-    # 应用现有的 multi_step wrapper（完全不变）
+        
     if wrappers and 'multi_step' in wrappers:
         multi_step_args = wrappers['multi_step']
         env = MultiStep(env, **multi_step_args)

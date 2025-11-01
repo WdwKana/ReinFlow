@@ -491,7 +491,8 @@ class TrainPPOAgent(TrainAgent):
                     f"Environment: {self.env_name} x {self.n_envs}\n"
                     f"Num denoising steps: {self.denoising_steps}\n"
                     f"Seed: {self.seed}\n"
-                    f"Success Rate: {self.buffer.success_rate * 100:3.2f}% ± {self.buffer.std_success_rate * 100:3.2f}%\n"
+                    f"Success Rate Once: {self.buffer.success_rate_once * 100:3.2f}% ± {self.buffer.std_success_rate_once * 100:3.2f}%\n"
+                    f"Success Rate At End: {self.buffer.success_rate_at_end * 100:3.2f}% ± {self.buffer.std_success_rate_at_end * 100:3.2f}%\n"
                     f"Episode Reward: {self.buffer.avg_episode_reward:8.2f} ± {self.buffer.std_episode_reward:8.2f}\n"
                     f"Best Reward (per action): {self.buffer.avg_best_reward:8.2f} ± {self.buffer.std_best_reward:8.2f}\n"
                     f"Episode Length: {self.buffer.avg_episode_length:8.2f} ± {self.buffer.std_episode_length:8.2f}\n"
@@ -499,12 +500,14 @@ class TrainPPOAgent(TrainAgent):
                     f"Critic lr: {self.critic_optimizer.param_groups[0]['lr']:.2e}"
                 ))
                 eval_dict={
-                            "eval/success rate": self.buffer.success_rate,
+                            "eval/success rate once": self.buffer.success_rate_once,
+                            "eval/success rate at end": self.buffer.success_rate_at_end,
                             "eval/avg episode reward": self.buffer.avg_episode_reward,
                             "eval/avg best reward": self.buffer.avg_best_reward,
                             "eval/avg episode length": self.buffer.avg_episode_length,
                             "eval/num episode": self.buffer.num_episode_finished,
-                            "eval/std success rate": self.buffer.std_success_rate,
+                            "eval/std success rate once": self.buffer.std_success_rate_once,
+                            "eval/std success rate at end": self.buffer.std_success_rate_at_end,
                             "eval/std episode reward": self.buffer.std_episode_reward,
                             "eval/std best reward": self.buffer.std_best_reward,
                             "eval/std episode length": self.buffer.std_episode_length,
@@ -531,7 +534,8 @@ class TrainPPOAgent(TrainAgent):
                     f"itr {self.itr} | Total Step {self.cnt_train_step / 1e6:4.3f} M | Time: {time:8.3f}\n"
                     f"Env: {self.env_name} x {self.n_envs}\n"
                     f"Episode Reward: {self.buffer.avg_episode_reward:8.2f} ± {self.buffer.std_episode_reward:8.2f}\n"
-                    f"Success Rate: {self.buffer.success_rate * 100:3.2f}% ± {self.buffer.std_success_rate * 100:3.2f}% \n"
+                    f"Success Rate Once: {self.buffer.success_rate_once * 100:3.2f}% ± {self.buffer.std_success_rate_once * 100:3.2f}% \n"
+                    f"Success Rate At End: {self.buffer.success_rate_at_end * 100:3.2f}% ± {self.buffer.std_success_rate_at_end * 100:3.2f}% \n"
                     f"Avg Best Reward: {self.buffer.avg_best_reward:8.2f} ± {self.buffer.std_best_reward:8.2f}\n"
                     f"Episode Length: {self.buffer.avg_episode_length:8.2f} ± {self.buffer.std_episode_length:8.2f}\n"
                     f"Actor lr :{self.actor_optimizer.param_groups[0]['lr']:.2e}\n"
@@ -546,11 +550,13 @@ class TrainPPOAgent(TrainAgent):
                 # upload to wandb
                 train_log_dict_basic = {
                     "train/total env step": self.cnt_train_step,
-                    "train/success rate": self.buffer.success_rate,
+                    "train/success rate once": self.buffer.success_rate_once,
+                    "train/success rate at end": self.buffer.success_rate_at_end,
                     "train/avg episode reward": self.buffer.avg_episode_reward,
                     "train/avg episode length": self.buffer.avg_episode_length,
                     "train/num episode": self.buffer.num_episode_finished,                    
-                    "train/std success rate": self.buffer.std_success_rate,
+                    "train/std success rate once": self.buffer.std_success_rate_once,
+                    "train/std success rate at end": self.buffer.std_success_rate_at_end,
                     "train/avg best reward": self.buffer.avg_best_reward,
                     "train/std episode reward": self.buffer.std_episode_reward,
                     "train/std best reward": self.buffer.std_best_reward,
@@ -587,7 +593,8 @@ class TrainPPOAgent(TrainAgent):
                 'total_env_steps': self.cnt_train_step,
                 'mode': mode,
                 'avg_episode_reward': round(getattr(self.buffer, 'avg_episode_reward', 0), 4),
-                'success_rate': round(getattr(self.buffer, 'success_rate', 0), 4),
+                'success_rate_once': round(getattr(self.buffer, 'success_rate_once', 0), 4),
+                'success_rate_at_end': round(getattr(self.buffer, 'success_rate_at_end', 0), 4),
                 'avg_best_reward': round(getattr(self.buffer, 'avg_best_reward', 0), 4),
                 'avg_episode_length': round(getattr(self.buffer, 'avg_episode_length', 0), 1),
                 'num_episodes': getattr(self.buffer, 'num_episode_finished', 0),
