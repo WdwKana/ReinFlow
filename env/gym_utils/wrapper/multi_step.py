@@ -16,7 +16,7 @@
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 # AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, STRICT LIABILITY, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
@@ -66,10 +66,9 @@ def repeated_space(space, n):
 def repeated_space(space, n):
     space_type_name = type(space).__name__
     
-    # 检查是否为 Box 类型（支持 gym 和 gymnasium）
+    
     if space_type_name == 'Box':
         return repeated_box(space, n)
-    # 检查是否为 Dict 类型（支持 gym 和 gymnasium）
     elif space_type_name == 'Dict':
         result_space = spaces.Dict()
         for key, value in space.items():
@@ -190,7 +189,6 @@ class MultiStep(gym.Wrapper):
             #print(f"DEBUG MultiStep: env.reset returned type: {type(result)}")
             #print(f"DEBUG MultiStep: env.reset result: {result}")
             
-            # 处理gymnasium格式的返回值 (obs, info) 或者只有obs
             if isinstance(result, tuple) and len(result) == 2:
                 obs, info = result
                 #print(f"DEBUG MultiStep: got tuple, obs type: {type(obs)}, info type: {type(info)}")
@@ -266,31 +264,25 @@ class MultiStep(gym.Wrapper):
         agg_success = None
         for act_step, act in enumerate(action):
             self.cnt += 1
-            # Step vectorized env one chunk step - 处理 gymnasium 格式
             result = self.env.step(act)
             
             if len(result) == 5:
-                # gymnasium 格式
                 observation, reward, terminated, truncated, info = result
                 
-                # 转换 tensor 为 numpy 以便后续处理
                 if isinstance(terminated, torch.Tensor):
                     terminated = terminated.detach().cpu().numpy()
                 if isinstance(truncated, torch.Tensor):
                     truncated = truncated.detach().cpu().numpy()
                 
-                done = np.logical_or(terminated, truncated)  # 现在可以安全合并
+                done = np.logical_or(terminated, truncated)
             elif len(result) == 4:
-                # gym 格式
                 observation, reward, done, info = result
                 
-                # 确保 done 也是 numpy
                 if isinstance(done, torch.Tensor):
                     done = done.detach().cpu().numpy()
             else:
                 raise ValueError(f"Unexpected step result length: {len(result)}")
 
-            # 转换 reward 为 numpy 以便聚合
             if isinstance(reward, torch.Tensor):
                 reward = reward.detach().cpu().numpy()
 
@@ -301,14 +293,12 @@ class MultiStep(gym.Wrapper):
             self.done.append(done)
             self._add_info(info)
             
-            # 初始化聚合变量（首次循环时）
             if first_step:
                 agg_mask = np.zeros_like(reward, dtype=bool)
                 agg_success_once = np.zeros_like(reward, dtype=bool)
                 agg_success_at_end = np.zeros_like(reward, dtype=bool)
                 first_step = False
                 
-            # 聚合 ManiSkill 的 final_info
             if isinstance(info, dict) and 'final_info' in info:
                 mask = info.get('_final_info', None)
                 if isinstance(mask, torch.Tensor):
@@ -330,21 +320,17 @@ class MultiStep(gym.Wrapper):
                         succ_at_end = np.asarray(succ_at_end).astype(bool)
                         agg_success_at_end[mask] = succ_at_end[mask]
         
-        # 处理最终输出
         observation = self._get_obs(self.n_obs_steps)
         reward = aggregate(self.reward, self.reward_agg_method)
         done = aggregate(self.done, "max")
         
-        # 保留最后一步的 info 结构，并添加聚合信息
         info_out = info if isinstance(info, dict) else {}
         
-        # 添加聚合的成功信息
         if agg_success_once is not None:
             info_out['success_once'] = agg_success_once
         if agg_success_at_end is not None:
             info_out['success_at_end'] = agg_success_at_end
             
-        # 更新 _final_info 为整个 chunk 的聚合
         if agg_mask is not None and agg_mask.any():
             info_out['_final_info'] = agg_mask
         info = info_out
@@ -406,18 +392,13 @@ class MultiStep(gym.Wrapper):
         terminated_vec = done_vec.astype(bool)
         truncated_vec = np.zeros_like(terminated_vec, dtype=bool)
 
-        # 确保terminated_vec反映真实的episode完成情况
         if agg_mask is not None and agg_mask.any():
-            # 有episode真正完成时，使用聚合的mask作为terminated信号
             terminated_vec = agg_mask.astype(bool)
         else:
-            # 没有episode完成时，terminated为False
             terminated_vec = np.zeros_like(done_vec, dtype=bool)
             
-        # truncated保持原来的逻辑
         truncated_vec = np.logical_and(done_vec, ~terminated_vec)
 
-        # Debug output for single env case
         if len(terminated_vec) == 1:
             has_success = False
             success_val = 'N/A'
@@ -433,14 +414,12 @@ class MultiStep(gym.Wrapper):
         return observation, reward, terminated_vec, truncated_vec, info_out
 
 
-#change by Dawei for env
     def _get_obs(self, n_steps=1):
         """
         Output (n_steps,) + obs_shape
         """
         assert len(self.obs) > 0
 
-        #debug by Dawei Wang 2025-09-01
         first_obs = self.obs[0]
         #print(f"DEBUG: _get_obs first_obs type: {type(first_obs)}")
         if isinstance(self.observation_space, spaces.Box):
@@ -456,7 +435,6 @@ class MultiStep(gym.Wrapper):
             else:
                 #print(f"ERROR: Expected dict, got {type(first_obs)}: {first_obs}")
                 raise RuntimeError(f"obs[0] should be dict, got {type(first_obs)}")
-            #use the actual keys from the obs changed by Dawei Wang 2025-09-01
             #actual_keys = self.obs[0].keys() if isinstance(self.obs[0], dict) else self.observation_space.keys()
             #for key in self.observation_space.keys():
             for key in actual_keys:

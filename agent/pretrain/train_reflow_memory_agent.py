@@ -127,30 +127,36 @@ class TrainReFlowAgent(PreTrainAgent):
                                         clip_intermediate_actions=self.test_clip_intermediate_actions)
         return samples
 
+    def _memory_state(self):
+        state = self.wm.state_dict().copy()
+        state.pop("memory", None)
+        state.pop("m", None)
+        return state
+
     def save_model(self):
-        """
-        saves model, ema and memory to disk;
-        """
+        """saves model, ema and memory to disk;"""
+        memory_state = self._memory_state()
         data = {
             "epoch": self.epoch,
             "model": self.model.state_dict(),
             "ema": self.ema_model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
-            "memory": self.wm.state_dict(),
+            "memory": memory_state,
         }
         savepath = os.path.join(self.checkpoint_dir, f"state_{self.epoch}.pt")
         torch.save(data, savepath)
         log.info(f"Saved model with memory to {savepath}\n")
 
     def save_best_model(self):
+        memory_state = self._memory_state()
         data = {
             "epoch": self.epoch,
             "model": self.model.state_dict(),
             "ema": self.ema_model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
-            "memory": self.wm.state_dict(),
+            "memory": memory_state,
         }
         savepath = os.path.join(self.checkpoint_dir, f"best.pt")
         torch.save(data, savepath)
@@ -159,13 +165,14 @@ class TrainReFlowAgent(PreTrainAgent):
         )
 
     def save_best_ema_model(self):
+        memory_state = self._memory_state()
         data = {
             "epoch": self.epoch,
             "model": self.model.state_dict(),
             "ema": self.ema_model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
-            "memory": self.wm.state_dict(),
+            "memory": memory_state,
         }
         savepath = os.path.join(self.checkpoint_dir, f"best_ema.pt")
         torch.save(data, savepath)
@@ -175,13 +182,14 @@ class TrainReFlowAgent(PreTrainAgent):
 
     def save_last_model(self):
         """for resume purpose"""
+        memory_state = self._memory_state()
         data = {
             "epoch": self.epoch,
             "model": self.model.state_dict(),
             "ema": self.ema_model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
-            "memory": self.wm.state_dict(),
+            "memory": memory_state,
         }
         savepath = os.path.join(self.checkpoint_dir, f"last.pt")
         torch.save(data, savepath)

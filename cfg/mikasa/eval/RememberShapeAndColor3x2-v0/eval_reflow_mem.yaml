@@ -8,11 +8,13 @@ _target_: agent.eval.eval_reflow_mikasa_mem_agent.EvalReFlowMikasaMemAgent
 name: ${env_name}_eval_reflow_mem_ta${horizon_steps}_td${denoising_steps}
 logdir: 
   ${oc.env:REINFLOW_LOG_DIR}/mikasa/eval/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_Temp0.01_0.02_tdf5/2025-11-01_03-55-07_42/checkpoint/best.pt
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_Temp0.01_0.02_tdf5/2025-11-01_03-55-07_42/checkpoint/best.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_ta4_td5_tdf5/2025-11-01_01-59-26_42/checkpoint/best.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_ta4_td5_tdf5/2025-10-31_11-54-20_42/checkpoint/best.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_vector_ta4_td5_tdf5/Best/best.pt
-
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-02_05-36-17_42/checkpoint/state_1500.pt
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-02_03-47-48_42/checkpoint/state_500.pt
+base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_from_pretrain_tanh_Temp0.04_0.08_tdf5/2025-11-02_10-55-24_33/checkpoint/state_90.pt
 load_ema: False
 seed: 42
 device: cuda:0
@@ -123,8 +125,8 @@ memory:
   _target_: model.common.learned_memory.PatchWorkingMemory
   embed_dim: 128
   num_slots: null        # 留空就会自动用 backbone.num_patch，也可以直接写死 196
-  read_temperature: 0.01
-  write_temperature: 0.02
+  read_temperature: 0.04
+  write_temperature: 0.08
   use_topk: false
   topk: 16
   residual_scale: 1.0

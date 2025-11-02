@@ -169,7 +169,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
         
         from model.common.learned_memory import PatchWorkingMemory
 
-        wm = PatchWorkingMemory(
+        self.wm = PatchWorkingMemory(
             embed_dim=self.memory_cfg.embed_dim,
             num_slots=self.model.actor_ft.policy.backbone.num_patch,
             read_temperature=self.memory_cfg.read_temperature,
@@ -178,9 +178,21 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
             topk=self.memory_cfg.topk,
             normalize=self.memory_cfg.normalize,
             device=self.device,
-        )
-        wm = wm.to(self.device)
-        memory_params = list(wm.parameters())
+        ).to(self.device)
+        mem_ckpt_path = getattr(self.cfg.model, "actor_policy_path", None)
+        if mem_ckpt_path:
+            try:
+                ckpt = torch.load(mem_ckpt_path, map_location=self.device, weights_only=True)
+            except TypeError:
+                ckpt = torch.load(mem_ckpt_path, map_location=self.device)
+            mem_state = ckpt.get("memory")
+            if mem_state is not None:
+                missing, unexpected = self.wm.load_state_dict(mem_state, strict=False)
+                log.info(f"Loaded working memory from actor_policy_path (missing={missing}, unexpected={unexpected})")
+            else:
+                log.info("actor_policy_path checkpoint has no memory; skip memory restore.")
+        #wm = wm.to(self.device)
+        memory_params = list(self.wm.parameters())
         log.info(f"Adding {len(memory_params)} memory parameters to actor optimizer")
         log.info(f"Memory param shapes: {[p.shape for p in memory_params]}")
         
@@ -200,7 +212,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
             self.reset_env(buffer_device=self.buffer_device)
             self.buffer.update_full_obs()
             episode_steps[:] = 0
-            wm.reset(B=self.n_envs,device=self.device)
+            self.wm.reset(B=self.n_envs,device=self.device)
             
             for step in tqdm(range(self.n_steps)) if self.verbose else range(self.n_steps):
                 if not self.verbose and step % 100 == 0: print(f"Processed {step} of {self.n_steps}")
@@ -214,7 +226,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                         .to(self.device)
                         for key in self.obs_dims
                     }
-                    cond['wm'] = wm
+                    cond['wm'] = self.wm
                     #cond['phase_ids'] = torch.from_numpy(phase_ids).to(self.device)
                     ## overload bug fix
                     action_samples, chains_venv = self.get_samples(cond=cond, 
@@ -231,7 +243,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                 done_venv = terminated_venv | truncated_venv
                 if done_venv.any():
                     episode_steps[done_venv] = 0
-                    wm.m[done_venv] = 0.0
+                    self.wm.m[done_venv] = 0.0
                 # overload, bug fix
                 #self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, terminated_venv, truncated_venv)
                 
@@ -248,7 +260,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                     if isinstance(mask, torch.Tensor):
                         mask = mask.detach().cpu().numpy().astype(bool)
                     
-                    if mask.any():  # 有episode完成
+                    if mask.any():  
                         episode_return_venv[mask] = reward_venv[mask]
                         episode_finished_mask_venv[mask] = True
                         final_info = info_venv.get('final_info', {})
@@ -289,7 +301,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                     #elif self.n_envs == 1:
                         #print(f"[CHK2] No success info found in info_venv structure")
 
-                # 使用环境返回的terminated信号（已经被MultiStep修复过）
+                
                 self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, 
                                 terminated_venv, truncated_venv, success_once_venv, success_at_end_venv, episode_return_venv, episode_length_venv, episode_finished_mask_venv)
                 
@@ -297,9 +309,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                 self.cnt_train_step+= self.n_envs * self.act_steps if not self.eval_mode else 0
             
             self.buffer.summarize_episode_reward()
-            print(f"DEBUG: Episode统计 - 完成的episodes: {self.buffer.num_episode_finished}")
-            #print(f"DEBUG: 实际的_final_info计数: {np.sum(info_venv.get('_final_info', np.zeros(self.n_envs)).astype(bool)) if isinstance(info_venv, dict) else 0}")
-            #print(f"DEBUG: firsts_trajs中1的个数: {torch.sum(self.buffer.firsts_trajs).item()}")
+
             if not self.eval_mode:
                 ### bug fix
                 self.buffer: PPOFlowImgBufferGPU
@@ -499,19 +509,20 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                 f"to {os.path.join(self.checkpoint_dir, 'best.pt')}\n "
             )
             self.is_best_so_far = False
-        def resume_training(self):
-            super().resume_training()
+    def resume_training(self):
+        super().resume_training()
 
-            if getattr(self, "wm", None) is None:
-                return
+        if getattr(self, "wm", None) is None:
+            log.warning("Checkpoint has no memory state; continuing with freshly initialized memory.")
+            return
 
-            checkpoint = torch.load(self.resume_path, weights_only=True, map_location=self.device)
-            memory_state = checkpoint.get("memory")
-            if memory_state is not None:
-                missing, unexpected = self.wm.load_state_dict(memory_state, strict=False)
-                log.info(f"Loaded memory state (missing={missing}, unexpected={unexpected})")
-            else:
-                log.warning("Checkpoint has no memory state; continuing with freshly initialized memory.")
+        checkpoint = torch.load(self.resume_path, weights_only=True, map_location=self.device)
+        memory_state = checkpoint.get("memory")
+        if memory_state is not None:
+            missing, unexpected = self.wm.load_state_dict(memory_state, strict=False)
+            log.info(f"Loaded memory state (missing={missing}, unexpected={unexpected})")
+        else:
+            log.warning("Checkpoint has no memory state; continuing with freshly initialized memory.")
                 
         
         

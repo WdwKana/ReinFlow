@@ -23,7 +23,8 @@ _target_: agent.finetune.reinflow.train_ppo_flow_img_mem_learned_1_agent.TrainPP
 name: ${env_name}_ft_reflow_mem_learned_matrix_Temp${memory.read_temperature}_${memory.write_temperature}_tdf5_seed${seed}
 logdir: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/${env_name}_ft_reflow_mem_learned_matrix_Temp${memory.read_temperature}_${memory.write_temperature}_tdf5/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x3-v0/RememberShapeAndColor3x3-v0_pre_reflow_mlp_img_ta4_td100/2025-10-24_02-00-01_42/checkpoint/state_2000.pt
-base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x3-v0/RememberShapeAndColor3x3-v0_pre_reflow_mlp_img_ta4_td100/2025-10-31_02-10-16_42/checkpoint/state_2000.pt
+base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x3-v0/RememberShapeAndColor3x3-v0_pre_reflow_mlp_img_ta4_td100/2025-11-02_06-09-14_42/checkpoint/state_2000.pt
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x3-v0/RememberShapeAndColor3x3-v0_pre_reflow_mlp_img_ta4_td100/2025-10-31_02-10-16_42/checkpoint/state_2000.pt
 #normalization_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/${env_name}/normalization.npz
 
 seed: 42
@@ -77,7 +78,7 @@ wandb:
   offline_mode: false
 
 train:
-  n_train_itr: 121
+  n_train_itr: 91
   n_critic_warmup_itr: 4
   n_steps: 180
   gamma: 0.999

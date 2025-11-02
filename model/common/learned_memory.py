@@ -20,7 +20,7 @@ class LearnedWorkingMemoryLite(nn.Module):
         self._debug_hook: Optional[Callable[[dict], None]] = None
 
         # memory buffer
-        self.register_buffer("m", torch.zeros(0, self.E, dtype=dtype, device=device))
+        self.register_buffer("m", torch.zeros(0, self.E, dtype=dtype, device=device), persistent=False)
 
         # learnable projection
         self.t_proj = nn.Linear(self.E, self.E, bias=False)

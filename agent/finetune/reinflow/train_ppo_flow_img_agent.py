@@ -191,7 +191,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                 #self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, terminated_venv, truncated_venv)
                 
                 # add success info
-                # 从info中提取成功信息
+            
                 success_once_venv = np.zeros(self.n_envs, dtype=bool)
                 success_at_end_venv = np.zeros(self.n_envs, dtype=bool)
                 episode_return_venv = np.zeros(self.n_envs, dtype=float)
@@ -203,7 +203,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                     if isinstance(mask, torch.Tensor):
                         mask = mask.detach().cpu().numpy().astype(bool)
                     
-                    if mask.any():  # 有episode完成
+                    if mask.any():  
                         episode_return_venv[mask] = reward_venv[mask]
                         episode_finished_mask_venv[mask] = True
                         final_info = info_venv.get('final_info', {})
@@ -244,7 +244,6 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                     #elif self.n_envs == 1:
                         #print(f"[CHK2] No success info found in info_venv structure")
 
-                # 使用环境返回的terminated信号（已经被MultiStep修复过）
                 self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, 
                                 terminated_venv, truncated_venv, success_once_venv, success_at_end_venv, episode_return_venv, episode_length_venv, episode_finished_mask_venv)
                 
@@ -252,9 +251,7 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                 self.cnt_train_step+= self.n_envs * self.act_steps if not self.eval_mode else 0
             
             self.buffer.summarize_episode_reward()
-            print(f"DEBUG: Episode统计 - 完成的episodes: {self.buffer.num_episode_finished}")
-            #print(f"DEBUG: 实际的_final_info计数: {np.sum(info_venv.get('_final_info', np.zeros(self.n_envs)).astype(bool)) if isinstance(info_venv, dict) else 0}")
-            #print(f"DEBUG: firsts_trajs中1的个数: {torch.sum(self.buffer.firsts_trajs).item()}")
+            
             if not self.eval_mode:
                 ### bug fix
                 self.buffer: PPOFlowImgBufferGPU

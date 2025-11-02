@@ -74,12 +74,12 @@ sys.stderr = open(sys.stderr.fileno(), mode="w", buffering=1)
 def main(cfg: OmegaConf):
     # resolve immediately so all the ${now:} resolvers will use the same time.
     OmegaConf.resolve(cfg)
-    # 仅 Gym/kitchen 任务才需要 d4rl
+    
     if cfg.get("env_suite") == "gym" or ("env" in cfg and "kitchen" in str(cfg.env)):
         try:
             import d4rl.gym_mujoco
         except ImportError:
-            log.warning("d4rl 未安装，跳过注册；非 Gym/kitchen 任务可忽略。")
+            log.warning("d4rl uninstalled, skipping registration; non-Gym/kitchen tasks can ignore this warning.")
     # ReinFlow Authors: Set rendering backend from config file.
     sim_device = cfg.get('sim_device', None)
     if sim_device is not None:

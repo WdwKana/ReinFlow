@@ -303,7 +303,10 @@ class TrainPPOAgent(TrainAgent):
         # set_seed_everywhere(self.seed)
         # Reset env before iteration starts (1) if specified, (2) at eval mode, or (3) right after eval mode
         if self.reset_at_iteration or self.eval_mode or self.last_itr_eval:
-            self.prev_obs_venv = self.reset_env_all()
+            if self.itr == 0:
+                self.prev_obs_venv = self.reset_env_all(seed=self.seed)
+            else:
+                self.prev_obs_venv = self.reset_env_all()
             #self.prev_obs_venv = self.reset_env_all(options_venv=self.options_venv)
             self.buffer.firsts_trajs[0] = 1
         else:

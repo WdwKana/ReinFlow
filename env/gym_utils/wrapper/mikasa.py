@@ -65,15 +65,15 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
             result = self.env.reset(**filtered_kwargs)
             
             
-            # 处理返回值，保持原有格式
+            
             if isinstance(result, tuple) and len(result) == 2:
                 obs, info = result
                 transformed_obs = self.observation(obs)
-                return transformed_obs, info  # 保持元组格式
+                return transformed_obs, info
             else:
                 obs = result
                 transformed_obs = self.observation(obs)
-                return transformed_obs  # 保持单值格式
+                return transformed_obs
                 
         except Exception as e:
             print(f"ERROR in mikasa wrapper reset: {e}")
@@ -122,23 +122,18 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
                     #print(f"DEBUG: RGB ndim: {rgb_img.ndim}")
                     
                     if isinstance(rgb_img, torch.Tensor):
-                        # 处理各种可能的维度情况
-                        if rgb_img.ndim == 5:  # 向量化环境可能产生 (num_envs, 1, H, W, C)
-                            #print(f"DEBUG: 5D tensor detected: {rgb_img.shape}")
-                            # 移除多余的维度
+                        if rgb_img.ndim == 5:  
                             rgb_img = rgb_img.squeeze(1)  # → (num_envs, H, W, C)
                             rgb_img = rgb_img.permute(0, 3, 1, 2)  # → (num_envs, C, H, W)
                         elif rgb_img.ndim == 4:
-                            #print(f"DEBUG: 4D tensor detected: {rgb_img.shape}")
                             if rgb_img.shape[0] == 1 and rgb_img.shape[-1] in [3, 4]:  # (1, H, W, C)
                                 rgb_img = rgb_img.squeeze(0)  # → (H, W, C)
                                 rgb_img = rgb_img.permute(2, 0, 1)  # → (C, H, W)
                             elif rgb_img.shape[-1] in [3, 4]:  # (num_envs, H, W, C)
                                 rgb_img = rgb_img.permute(0, 3, 1, 2)  # → (num_envs, C, H, W)
-                            # 如果已经是 (num_envs, C, H, W) 或 (1, C, H, W) 格式，不需要变换
                             elif rgb_img.shape[1] in [3, 4] and rgb_img.shape[1] < rgb_img.shape[2]:
                                 #print(f"DEBUG: Already in (batch, C, H, W) format")
-                                pass  # 已经是正确格式
+                                pass
                             #else:
                                 #print(f"DEBUG: Unexpected 4D shape: {rgb_img.shape}")
                         elif rgb_img.ndim == 3 and rgb_img.shape[-1] in [3, 4]:  # (H, W, C)
@@ -241,15 +236,12 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
 
         for key, value in ret.items():
             if isinstance(value, torch.Tensor):
-                # 图像：只保证 batch 维存在，输出 (B, C, H, W)
                 if key in ['rgb', 'rgbd', 'depth']:
                     if value.ndim == 3:  # (C, H, W) → (1, C, H, W)
                         value = value.unsqueeze(0)
-                # 状态：只保证 batch 维存在，输出 (B, D)
                 elif key == 'state':
                     if value.ndim == 1:  # (D,) → (1, D)
                         value = value.unsqueeze(0)
-                # 转换为 numpy float32
                 converted = value.detach().cpu().numpy().astype(np.float32)
                 ret[key] = converted
 
@@ -267,12 +259,9 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
         result = self.env.step(action)
         
         if len(result) == 5:
-            # 已经是 gymnasium 格式: (obs, reward, terminated, truncated, info)
             obs, reward, terminated, truncated, info = result
         elif len(result) == 4:
-            # 是 gym 格式: (obs, reward, done, info) -> 需要转换为 gymnasium 格式
             obs, reward, done, info = result
-            # 将 done 拆分为 terminated 和 truncated
             if isinstance(done, torch.Tensor):
                 done = done.detach().cpu().numpy().astype(bool)
             elif not isinstance(done, (np.ndarray, list)):
@@ -280,15 +269,11 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
             else:
                 done = np.asarray(done).astype(bool)
             
-            # 在这里可以根据具体逻辑决定如何拆分 done
-            # 一般情况下可以都设为 terminated，truncated 设为 False
             terminated = done
             truncated = np.zeros_like(done, dtype=bool)
         else:
             raise ValueError(f"Unexpected step result length: {len(result)}")
         
-        # 只转换观测，保持 reward 为 tensor
-        obs = self.observation(obs)  # 这里转换为 numpy
+        obs = self.observation(obs)
         
-        # reward, terminated, truncated 保持原格式（tensor）
         return obs, reward, terminated, truncated, info

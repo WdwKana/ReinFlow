@@ -1,0 +1,16 @@
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/cuda/__init__.py:54: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/sapien/_vulkan_tricks.py:37: UserWarning: Failed to find Vulkan ICD file. This is probably due to an incorrect or partial installation of the NVIDIA driver. SAPIEN will attempt to provide an ICD file anyway but it may not work.
+  warn(
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.5
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/gymnasium/core.py:311: UserWarning: [33mWARN: env.device to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.device` for environment variables or `env.get_wrapper_attr('device')` that will search the reminding wrappers.[0m
+  logger.warn(
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/gymnasium/core.py:311: UserWarning: [33mWARN: env.update_obs_space to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.update_obs_space` for environment variables or `env.get_wrapper_attr('update_obs_space')` that will search the reminding wrappers.[0m
+  logger.warn(
+[2025-11-03T00:25:33.621] error: *** JOB 3320 ON netherite CANCELLED AT 2025-11-03T00:25:33 DUE to SIGNAL Terminated ***

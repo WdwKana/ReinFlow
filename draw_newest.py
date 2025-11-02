@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -86,8 +87,10 @@ REINFLOW_FILES = {
         42: f"{REINFLOW_BASE}/RememberShape5-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-24_20-49-42_42/training_metrics.csv",
     },
     "RememberShapeAndColor3x2-v0": {
-        33: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-25_05-47-06_33/training_metrics.csv",
-        42: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-24_09-32-58_42/training_metrics.csv",
+        # 33: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-25_05-47-06_33/training_metrics.csv",
+        # 42: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-24_09-32-58_42/training_metrics.csv",
+        33: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-01_22-14-47_33/training_metrics.csv",
+        42: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-01_22-54-03_42/training_metrics.csv",
     },
     "RememberShapeAndColor3x3-v0": {
         33: f"{REINFLOW_BASE}/RememberShapeAndColor3x3-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-24_22-39-09_33/training_metrics.csv",
@@ -107,8 +110,10 @@ REINFLOW_MEM_FILES = {
         33: f"{REINFLOW_BASE}/RememberColor5-v0_ft_reflow_mem_learned_matrix_ta4_td5_tdf5/2025-10-29_10-51-12_33/training_metrics.csv",
     },
     "RememberShapeAndColor3x2-v0": {
-        42: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_Temp0.01_0.02_tdf5/2025-11-01_03-59-25_42/training_metrics.csv",
-        33: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_Temp0.01_0.02_tdf5/2025-11-01_11-08-30_33/training_metrics.csv",
+        # 42: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_Temp0.01_0.02_tdf5/2025-11-01_03-59-25_42/training_metrics.csv",
+        # 33: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_Temp0.01_0.02_tdf5/2025-11-01_11-08-30_33/training_metrics.csv",
+        42: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix__tanh_Temp0.01_0.02_tdf5/2025-11-01_20-00-00_42/training_metrics.csv",
+        33: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix__tanh_Temp0.01_0.02_tdf5/2025-11-01_20-00-05_33/training_metrics.csv",
         #42: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_ta4_td5_tdf5/2025-10-29_03-32-39_42/training_metrics.csv",
         #33: f"{REINFLOW_BASE}/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_ta4_td5_tdf5/2025-10-29_10-26-51_33/training_metrics.csv",
     },
@@ -158,7 +163,7 @@ METRIC_MAPPING = {
 }
 
 def load_and_average(file_dict, mode, metric_col):
-    """加载多个种子的数据并求平均"""
+    
     all_data = []
     
     for seed, file_path in file_dict.items():
@@ -167,13 +172,12 @@ def load_and_average(file_dict, mode, metric_col):
         df_filtered = df[df['mode'] == mode][['total_env_steps', metric_col]]
         all_data.append(df_filtered)
     
-    # 找到所有共同的steps
+    
     common_steps = set(all_data[0]['total_env_steps'])
     for df in all_data[1:]:
         common_steps &= set(df['total_env_steps'])
     common_steps = sorted(common_steps)
     
-    # 计算每个step的平均值和标准误
     mean_values = []
     sem_values = []
     for step in common_steps:
@@ -184,7 +188,6 @@ def load_and_average(file_dict, mode, metric_col):
     
     return common_steps, mean_values, sem_values
 
-# 加载三组数据
 print(f"\n{'='*60}")
 print(f"Processing Task: {TASK_NAME}")
 print(f"Mode: {MODE}, Metric: {METRIC}")
@@ -212,7 +215,6 @@ steps_mem, mean_mem, sem_mem = load_and_average(
     REINFLOW_MEM_FILES[TASK_NAME], MODE, reinflow_metric_col
 )
 
-# 绘图
 plt.figure(figsize=(10, 6))
 
 # PPO-MLP
@@ -243,7 +245,6 @@ plt.fill_between(steps_mem,
                  np.array(mean_mem) + np.array(sem_mem), 
                  alpha=0.2)
 
-# 图表设置
 metric_labels = {
     "return": "Average Episode Reward",
     "success": "Success Rate (Once)",
@@ -256,8 +257,9 @@ plt.legend(fontsize=11, loc='best')
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 
-# 保存
-output_file = f"{TASK_NAME}_{MODE}_{METRIC}_comparison.png"
+results_dir = os.path.join(os.path.dirname(__file__), "results")
+os.makedirs(results_dir, exist_ok=True)
+output_file = os.path.join(results_dir, f"{TASK_NAME}_{MODE}_{METRIC}_comparison.png")
 plt.savefig(output_file, dpi=300, bbox_inches='tight')
 
 print(f"\n{'='*60}")

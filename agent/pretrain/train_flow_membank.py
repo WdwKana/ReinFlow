@@ -14,11 +14,11 @@ class TrainReFlowAgent(PreTrainAgent):
         self.model: ReFlow
         self.ema_model: ReFlow
         
-        # 添加 working memory（如果使用 memorybank 模型）
+        
         self.use_memory = 'mlp_memorybank' in cfg.model.network._target_
         if self.use_memory:
             embed_dim = cfg.model.network.backbone.cfg.embed_dim
-            # 为 train/val 各创建一个 memory（因为 batch 可能来自不同 episode）
+            
             self.wm_train = WorkingMemory(
                 embed_dim=embed_dim,
                 ema=0.9,
@@ -40,7 +40,6 @@ class TrainReFlowAgent(PreTrainAgent):
             self.test_clip_intermediate_actions=True
             self.test_model_type='ema'
             
-            # 为测试创建独立的 memory
             if self.use_memory:
                 self.wm_test = WorkingMemory(
                     embed_dim=embed_dim,
@@ -48,44 +47,32 @@ class TrainReFlowAgent(PreTrainAgent):
                     temperature=0.07,
                     device=self.device
                 )
-                # 测试时的 episode step 追踪
                 self.test_episode_steps = None
     
     def get_loss(self, batch_data):
         '''for training and validation on fixed dataset'''
         act, cond = batch_data
         
-        # 如果使用 memory，添加 wm 和 phase_ids
         if self.use_memory and self.wm_train is not None:
-            # 从 cond 中提取 episode_step（来自数据集）
             episode_steps = cond.get('episode_step', None)
             if episode_steps is not None:
-                # 确保是 tensor，并且形状正确
                 if not isinstance(episode_steps, torch.Tensor):
-                    # 如果是单个数字，扩展为 batch
                     if isinstance(episode_steps, (int, float)):
                         B = act.shape[0]  # 从 action 获取 batch size
                         episode_steps = torch.full((B,), episode_steps, dtype=torch.long, device=self.device)
                     else:
-                        # 如果是 list 或 numpy array
                         episode_steps = torch.tensor(episode_steps, dtype=torch.long, device=self.device)
                 elif episode_steps.dim() == 0:
-                    # 如果是 0-d tensor，扩展为 batch
                     B = act.shape[0]
                     episode_steps = episode_steps.unsqueeze(0).expand(B)
                 
-                # 判断 phase: obs(0-4), delay(5-9), sel(10+)
                 phase_ids = torch.where(episode_steps < 5, 0, 
                            torch.where(episode_steps < 10, 1, 2))
                 
-                # 对于 episode 开始的样本（step=0），重置对应的 memory
-                # 注意：因为离线数据是随机采样的，batch 中可能混合不同 episode 的样本
-                # 简化处理：检测到任何 step=0 就重置整个 memory
                 if (episode_steps == 0).any():
                     B = act.shape[0]
                     self.wm_train.reset(B=B, device=self.device)
                 
-                # 添加到 cond
                 cond['wm'] = self.wm_train
                 cond['phase_ids'] = phase_ids
         
@@ -95,13 +82,10 @@ class TrainReFlowAgent(PreTrainAgent):
     
     def inference(self, cond:dict):
         '''for testing purpose in mujoco'''
-        # 在测试时也需要传递 wm（如果使用）
         if self.use_memory and hasattr(self, 'wm_test'):
             B = cond['state'].shape[0]
             
-            # 根据当前 episode step 判断 phase
             if self.test_episode_steps is None:
-                # 初始化
                 self.test_episode_steps = torch.zeros(B, dtype=torch.long, device=self.device)
                 self.wm_test.reset(B=B, device=self.device)
             
@@ -122,25 +106,21 @@ class TrainReFlowAgent(PreTrainAgent):
                                         record_intermediate=False,
                                         clip_intermediate_actions=self.test_clip_intermediate_actions)
         
-        # 更新 episode step（测试时）
         if self.use_memory and hasattr(self, 'wm_test'):
             self.test_episode_steps += 1
         
         return samples
     
     def test(self):
-        """重写 test 方法以支持 working memory"""
         if not self.test_in_mujoco:
             return
         
         log.info(f"Evaluating {self.model.__class__.__name__} in environment {self.env_name} with denoising steps = {self.test_denoising_steps}")
         
-        # 初始化测试时的 memory
         if self.use_memory:
             self.test_episode_steps = torch.zeros(self.n_envs, dtype=torch.long, device=self.device)
             self.wm_test.reset(B=self.n_envs, device=self.device)
         
-        # ... 复制父类的 test 代码，但在 reset 时也重置 memory ...
         from util.timer import Timer
         log_all= self.test_log_all
         timer = Timer()
@@ -175,14 +155,12 @@ class TrainReFlowAgent(PreTrainAgent):
             done_venv = terminated_venv | truncated_venv
             firsts_trajs[step + 1] = done_venv
             
-            # 重置完成的 episode 的 memory
             if self.use_memory and done_venv.any():
                 self.test_episode_steps[done_venv] = 0
                 self.wm_test.m[done_venv] = 0.0
             
             prev_obs_venv = obs_venv
         
-        # ... 复制父类的统计和日志代码 ...
         episodes_start_end = []
         for env_ind in range(self.n_envs):
             env_steps = np.where(firsts_trajs[:, env_ind] == 1)[0]

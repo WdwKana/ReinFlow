@@ -108,7 +108,7 @@ class TrainAgent:
         '''
 
         if env_type == "mikasa":
-            # 使用高效的 mikasa 环境创建
+            
             from env.gym_utils import make_mikasa_efficient
             self.venv = make_mikasa_efficient(
                 env_name=cfg.env.name,
@@ -120,7 +120,7 @@ class TrainAgent:
                 **cfg.env.get("specific", {})
             )
         else:
-            # 保持原有的通用环境创建方式
+            
             self.venv = make_async(
                 cfg.env.name,
                 env_type=env_type,
@@ -137,7 +137,7 @@ class TrainAgent:
                 action_dim=cfg.action_dim,
                 **cfg.env.specific if "specific" in cfg.env else {},
             )
-        #changed by Dawei Wang 2025-09-01
+        
         '''        
         if not env_type == "furniture":
             self.venv.seed(
@@ -257,7 +257,7 @@ class TrainAgent:
                 )
         return obs_venv
     '''
-    #changed by Dawei Wang 2025-09-01
+   
     def reset_env_all(self, verbose=False, **kwargs):
         print(f"DEBUG: Calling self.venv.reset() with kwargs: {kwargs}")
         print(f"DEBUG: self.venv type: {type(self.venv)}")

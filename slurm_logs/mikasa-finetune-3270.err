@@ -13,3 +13,4 @@ wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
   logger.warn(
 /home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/gymnasium/core.py:311: UserWarning: [33mWARN: env.update_obs_space to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.update_obs_space` for environment variables or `env.get_wrapper_attr('update_obs_space')` that will search the reminding wrappers.[0m
   logger.warn(
+[2025-11-02T04:51:58.445] error: *** JOB 3270 ON netherite CANCELLED AT 2025-11-02T04:51:58 DUE to SIGNAL Terminated ***

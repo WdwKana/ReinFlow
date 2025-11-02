@@ -78,7 +78,7 @@ wandb:
   run: ${now:%Y-%m-%d}_${now:%H-%M-%S}_${name}
   offline_mode: false
 train:
-  n_train_itr: 121
+  n_train_itr: 91
   n_critic_warmup_itr: 4
   n_steps: 180
   gamma: 0.999

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # ============ 配置部分 - 直接复制粘贴文件路径 ============
 
 # 方法1的三个种子文件路径
-method1_name = "Reinflow-Baseline"
+method1_name = "Reinflow-seed33_1"
 # SeqOfColors3-v0
 # method1_files = [
 #     "log/mikasa/finetune/SeqOfColors3-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-11_11-23-56_42/training_metrics.csv",
@@ -24,11 +24,10 @@ method1_name = "Reinflow-Baseline"
 # ]
 # InterceptSlow-v0
 method1_files = [
-    "log/mikasa/finetune/InterceptSlow-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-15_03-39-35_42/training_metrics.csv",
-]
+"log/mikasa/finetune/RememberShapeAndColor3x3-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-02__tanh_10-02-15_33/training_metrics.csv"]
 
 # 方法2的三个种子文件路径
-method2_name = "Reinflow-Memory"
+method2_name = "Reinflow-seed33_2"
 # SeqOfColors3-v0
 # method2_files = [
 #     "log/mikasa/finetune/SeqOfColors3-v0_ft_reflow_membank_ta4_td5_tdf5/2025-10-11_22-11-52_42/training_metrics.csv",
@@ -47,24 +46,24 @@ method2_name = "Reinflow-Memory"
 # ]
 # InterceptSlow-v0
 method2_files = [
-    "log/mikasa/finetune/InterceptSlow-v0_ft_reflow_membank_ta4_td5_tdf5/2025-10-15_17-12-07_42/training_metrics.csv",
-]
+"log/mikasa/finetune/RememberShapeAndColor3x3-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-02__tanh_10-40-08_33/training_metrics.csv"]
 
 # 数据模式: "train" 或 "eval"
-mode = "train"
+mode = "eval"
 
 # 指标选择: "episode" (avg_episode_reward) 或 "success" (success_rate)
-metric = "success"
+metric = "success_end"
 
 # 任务名称（用于图表标题）
-task_name = "InterceptSlow-v0"
+task_name = "RememberShapeAndColor3x3-v0"
 
 # ============ 数据处理和绘图 ============
 
 # 指标名称映射
 metric_mapping = {
     "episode": "avg_episode_reward",
-    "success": "success_rate"
+    "success": "success_rate_once",
+    "success_end": "success_rate_at_end"
 }
 metric_col = metric_mapping[metric]
 
@@ -120,7 +119,8 @@ plt.fill_between(steps2,
 # 图表设置
 metric_labels = {
     "episode": "Average Episode Reward",
-    "success": "Success Rate"
+    "success": "Success Rate Once",
+    "success_end": "Success Rate at End"
 }
 plt.xlabel('Training Steps', fontsize=12)
 plt.ylabel(metric_labels[metric], fontsize=12)
