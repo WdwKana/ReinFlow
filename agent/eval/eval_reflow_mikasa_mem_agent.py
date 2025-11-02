@@ -42,6 +42,12 @@ class EvalReFlowMikasaMemAgent(EvalReFlowMikasaAgent):
                 **instantiate_kwargs,
             )
             self.memory = self.memory.to(self.device)
+            checkpoint = torch.load(self.base_policy_path, map_location=self.device)
+            if "memory" in checkpoint and self.memory is not None:
+                missing, unexpected = self.memory.load_state_dict(checkpoint["memory"], strict=False)
+                log.info(f"Loaded memory state (missing={missing}, unexpected={unexpected})")
+            else:
+                log.warning("Memory state not found in checkpoint; using fresh initialization.")
 
 
             if hasattr(self.memory, "eval"):

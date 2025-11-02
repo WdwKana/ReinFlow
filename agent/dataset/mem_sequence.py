@@ -11,6 +11,8 @@ and the normalization info is also used in RL fine-tuning.
 """
 
 from collections import namedtuple
+from typing import NamedTuple
+
 import numpy as np
 import torch
 import logging
@@ -27,7 +29,16 @@ TransitionWithReturn = namedtuple(
 )
 
 
-class StitchedSequenceDataset(torch.utils.data.Dataset):
+class SequenceSample(NamedTuple):
+    start: int
+    num_before_start: int
+    episode_id: int
+    episode_step: int
+    is_episode_start: bool
+    is_episode_end: bool
+
+
+class StitchedSequenceMemoryDataset(torch.utils.data.Dataset):
     """
     Load stitched trajectories of states/actions/images, and 1-D array of traj_lengths, from npz or pkl file.
 
@@ -50,6 +61,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
         max_n_episodes=-1,
         use_img=False,
         device="cuda:0",
+        return_episode_info=True,
     ):
         assert (
             img_cond_steps <= cond_steps
@@ -63,6 +75,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
         self.use_img = use_img
         self.max_n_episodes = max_n_episodes
         self.dataset_path = dataset_path
+        self.return_episode_info = return_episode_info
 
         # Load dataset to device specified
         if dataset_path.endswith(".npz"):
@@ -79,7 +92,8 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
         traj_lengths = dataset["traj_lengths"][:max_n_episodes]  # 1-D array
         total_num_steps = np.sum(traj_lengths)
         # Set up indices for sampling
-        self.indices = self.make_indices(traj_lengths, horizon_steps)
+        self._all_indices = self.make_indices(traj_lengths, horizon_steps)
+        self.indices = list(self._all_indices)
 
         # Extract states and actions up to max_n_episodes
         self.states = (
@@ -104,11 +118,15 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
             log.info(f"Images shape/type: {self.images.shape, self.images.dtype}")
         log.info(f"Finished creating {self.__class__.__name__} from {dataset_path}")
 
+        self._build_cached_metadata()
+
     def __getitem__(self, idx):
         """
         repeat states/images if using history observation at the beginning of the episode
         """
-        start, num_before_start = self.indices[idx]
+        sample_index = self.indices[idx]
+        start = sample_index.start
+        num_before_start = sample_index.num_before_start
         end = start + self.horizon_steps
         # print(f"start={start}, num_before_start={num_before_start}, (start - num_before_start) : (start + 1)={(start - num_before_start)} : {(start + 1)}")
         # print(f"self.states length: {self.states.shape}")
@@ -131,11 +149,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
                 for t in reversed(range(self.cond_steps))
             ]
         )  # more recent is at the end
-        
-        # 添加 episode_step 信息（用于 memory phase 判断）
-        episode_step = num_before_start  # 当前 step 在 episode 中的位置
-        
-        conditions = {"state": states, "episode_step": episode_step}
+        conditions = {"state": states}
         if self.use_img:
             images = self.images[(start - num_before_start) : end]
             images = torch.stack(
@@ -145,6 +159,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
                 ]
             )
             conditions["rgb"] = images
+        self._add_episode_info(conditions, idx)
         batch = Batch(actions, conditions)
         return batch
 
@@ -155,31 +170,95 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
         """
         indices = []
         cur_traj_index = 0
-        for traj_length in traj_lengths:
-            max_start = cur_traj_index + traj_length - horizon_steps
-            indices += [
-                (i, i - cur_traj_index) for i in range(cur_traj_index, max_start + 1)
-            ]
+        for episode_id, traj_length in enumerate(traj_lengths):
+            episode_start = cur_traj_index
+            episode_end = cur_traj_index + traj_length
+            max_start = episode_end - horizon_steps
+            for start in range(episode_start, max_start + 1):
+                num_before_start = start - episode_start
+                end = start + horizon_steps
+                indices.append(
+                    SequenceSample(
+                        start=start,
+                        num_before_start=num_before_start,
+                        episode_id=episode_id,
+                        episode_step=num_before_start,
+                        is_episode_start=(num_before_start == 0),
+                        is_episode_end=(end >= episode_end),
+                    )
+                )
             cur_traj_index += traj_length
         return indices
+
+    def _build_cached_metadata(self):
+        if not self.return_episode_info:
+            self._episode_ids = None
+            self._episode_steps = None
+            self._episode_starts = None
+            self._episode_ends = None
+            return
+
+        device = self.states.device if hasattr(self, "states") else torch.device(self.device)
+        if len(self.indices) == 0:
+            self._episode_ids = torch.empty(0, dtype=torch.long, device=device)
+            self._episode_steps = torch.empty(0, dtype=torch.long, device=device)
+            self._episode_starts = torch.empty(0, dtype=torch.bool, device=device)
+            self._episode_ends = torch.empty(0, dtype=torch.bool, device=device)
+            return
+
+        self._episode_ids = torch.tensor(
+            [sample.episode_id for sample in self.indices],
+            dtype=torch.long,
+            device=device,
+        )
+        self._episode_steps = torch.tensor(
+            [sample.episode_step for sample in self.indices],
+            dtype=torch.long,
+            device=device,
+        )
+        self._episode_starts = torch.tensor(
+            [sample.is_episode_start for sample in self.indices],
+            dtype=torch.bool,
+            device=device,
+        )
+        self._episode_ends = torch.tensor(
+            [sample.is_episode_end for sample in self.indices],
+            dtype=torch.bool,
+            device=device,
+        )
+
+    def _add_episode_info(self, conditions, idx):
+        if not self.return_episode_info or self._episode_ids is None:
+            return
+        conditions["episode_id"] = self._episode_ids[idx]
+        conditions["episode_step"] = self._episode_steps[idx]
+        conditions["episode_start"] = self._episode_starts[idx]
+        conditions["episode_end"] = self._episode_ends[idx]
 
     def set_train_val_split(self, train_split):
         """
         Not doing validation right now
         """
-        num_train = int(len(self.indices) * train_split)
-        train_indices = random.sample(self.indices, num_train)
-        val_indices = [i for i in range(len(self.indices)) if i not in train_indices]
-        self.indices = train_indices
-        return val_indices
+        total = len(self._all_indices)
+        num_train = int(total * train_split)
+        all_positions = list(range(total))
+        random.shuffle(all_positions)
+        train_positions = sorted(all_positions[:num_train])
+        val_positions = sorted(all_positions[num_train:])
+        self.set_indices(train_positions)
+        return val_positions
+
+    def set_indices(self, subset_indices):
+        self.indices = [self._all_indices[i] for i in subset_indices]
+        self._build_cached_metadata()
 
     def __len__(self):
         return len(self.indices)
 
 
-class StitchedSequenceQLearningDataset(StitchedSequenceDataset):
+class StitchedSequenceMemoryQLearningDataset(StitchedSequenceMemoryDataset):
     """
-    Extends StitchedSequenceDataset to include rewards and dones for Q learning
+    Extends StitchedSequenceMemoryDataset to include rewards and dones for Q learning
     
     **Returns:**
     batch = Transition(
@@ -261,20 +340,34 @@ class StitchedSequenceQLearningDataset(StitchedSequenceDataset):
         num_skip = 0
         indices = []
         cur_traj_index = 0
-        for traj_length in traj_lengths:
-            max_start = cur_traj_index + traj_length - horizon_steps
-            if not self.dones[cur_traj_index + traj_length - 1]:  # truncation
+        for episode_id, traj_length in enumerate(traj_lengths):
+            episode_start = cur_traj_index
+            episode_end = cur_traj_index + traj_length
+            max_start = episode_end - horizon_steps
+            if not self.dones[episode_end - 1]:  # truncation
                 max_start -= 1
                 num_skip += 1
-            indices += [
-                (i, i - cur_traj_index) for i in range(cur_traj_index, max_start + 1)
-            ]
+            for start in range(episode_start, max_start + 1):
+                num_before_start = start - episode_start
+                end = start + horizon_steps
+                indices.append(
+                    SequenceSample(
+                        start=start,
+                        num_before_start=num_before_start,
+                        episode_id=episode_id,
+                        episode_step=num_before_start,
+                        is_episode_start=(num_before_start == 0),
+                        is_episode_end=(end >= episode_end),
+                    )
+                )
             cur_traj_index += traj_length
         log.info(f"Number of transitions skipped due to truncation: {num_skip}")
         return indices
 
     def __getitem__(self, idx):
-        start, num_before_start = self.indices[idx]
+        sample_index = self.indices[idx]
+        start = sample_index.start
+        num_before_start = sample_index.num_before_start
         end = start + self.horizon_steps
         states = self.states[(start - num_before_start) : (start + 1)]
         actions = self.actions[start:end]
@@ -299,14 +392,13 @@ class StitchedSequenceQLearningDataset(StitchedSequenceDataset):
                 for t in reversed(range(self.cond_steps))
             ]
         )  # more recent is at the end
-        episode_step = num_before_start  # 当前 step 在 episode 中的位置
         next_states = torch.stack(
             [
                 next_states[max(num_before_start - t, 0)]
                 for t in reversed(range(self.cond_steps))
             ]
         )  # more recent is at the end
-        conditions = {"state": states, "next_state": next_states, "episode_step": episode_step}
+        conditions = {"state": states, "next_state": next_states}
         if self.use_img:
             images = self.images[(start - num_before_start) : end]
             images = torch.stack(
@@ -316,6 +408,7 @@ class StitchedSequenceQLearningDataset(StitchedSequenceDataset):
                 ]
             )
             conditions["rgb"] = images
+        self._add_episode_info(conditions, idx)
         if self.get_mc_return:
             reward_to_gos = self.reward_to_go[start : (start + 1)]
             batch = TransitionWithReturn(

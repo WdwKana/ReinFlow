@@ -26,6 +26,7 @@ DPPO fine-tuning.
 run this line to finetune hopper-v2: 
 python script/run.py --config-dir=cfg/gym/finetune/hopper-v2 --config-name=ft_ppo_reflow_mlp device=cuda:7
 """
+import os
 from tqdm import tqdm as tqdm
 import torch
 import logging
@@ -460,6 +461,57 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
                     break
                 
                 yield update_epoch, batch_id, minibatch
+    def save_model(self, only_save_policy_network=False):
+        policy_network_state_dict = {
+            "network." + key: value
+            for key, value in self.model.actor_ft.policy.state_dict().items()
+        }
+
+        data = {
+            "itr": self.itr,
+            "cnt_train_steps": self.cnt_train_step,
+            "actor_optimizer": self.actor_optimizer.state_dict(),
+            "critic_optimizer": self.critic_optimizer.state_dict(),
+            "actor_lr_scheduler": self.actor_lr_scheduler.state_dict(),
+            "critic_lr_scheduler": self.critic_lr_scheduler.state_dict(),
+        }
+
+        if getattr(self, "wm", None) is not None:
+            data["memory"] = self.wm.state_dict()
+
+        if only_save_policy_network:
+            data["policy"] = policy_network_state_dict
+        else:
+            data["model"] = self.model.state_dict()
+            data["policy"] = policy_network_state_dict
+
+        def _save_checkpoint(filename: str) -> None:
+            path = os.path.join(self.checkpoint_dir, filename)
+            torch.save(data, path)
+
+        _save_checkpoint("last.pt")
+        if self.itr % self.save_model_freq == 0 or self.itr == self.n_train_itr - 1:
+            _save_checkpoint(f"state_{self.itr}.pt")
+        if self.is_best_so_far:
+            _save_checkpoint("best.pt")
+            log.info(
+                f"\n Saved best checkpoint with reward {self.current_best_reward:4.3f} "
+                f"to {os.path.join(self.checkpoint_dir, 'best.pt')}\n "
+            )
+            self.is_best_so_far = False
+        def resume_training(self):
+            super().resume_training()
+
+            if getattr(self, "wm", None) is None:
+                return
+
+            checkpoint = torch.load(self.resume_path, weights_only=True, map_location=self.device)
+            memory_state = checkpoint.get("memory")
+            if memory_state is not None:
+                missing, unexpected = self.wm.load_state_dict(memory_state, strict=False)
+                log.info(f"Loaded memory state (missing={missing}, unexpected={unexpected})")
+            else:
+                log.warning("Checkpoint has no memory state; continuing with freshly initialized memory.")
                 
         
         

@@ -515,7 +515,7 @@ class VisionFlowMLPMembank(nn.Module):
         if self.num_img ==2:  # TODO: properly handle multiple images
             rgb1 = rgb[:, 0]
             rgb2 = rgb[:, 1]
-            if self.augment:
+            if self.augment and self.training:
                 rgb1 = self.aug(rgb1)
                 rgb2 = self.aug(rgb2)
             feat1 = self.backbone.forward(rgb1)
@@ -526,7 +526,7 @@ class VisionFlowMLPMembank(nn.Module):
             
             feat = torch.cat([feat1, feat2], dim=-1)
         elif self.num_img ==1:  # single image
-            if self.augment:
+            if self.augment and self.training:
                 rgb = self.aug(rgb)
             feat = self.backbone.forward(rgb)  # [B, P, E] patch tokens
             '''
@@ -543,7 +543,7 @@ class VisionFlowMLPMembank(nn.Module):
             '''
             if 'wm' in cond and cond['wm'] is not None:
                 # enhanced_feat, attn = cond['wm'](feat, return_weights=True)
-                feat = cond['wm'](feat)  # read and write and return enhanced patch representation
+                feat = cond['wm'](feat, write=self.training)  # read and write and return enhanced patch representation
                 #feat = feat + 0.1 * att_feat 
             '''   
                 phase_ids = cond.get('phase_ids', None)  # [B] tensor: 0=obs, 1=delay, 2=sel

@@ -80,7 +80,7 @@ wandb:
   offline_mode: false
 
 train:
-  n_train_itr: 121
+  n_train_itr: 91
   n_critic_warmup_itr: 4
   n_steps: 180
   gamma: 0.999
@@ -212,8 +212,8 @@ model:
   explore_net_activation_type: Tanh
 memory:
   embed_dim: 128  
-  read_temperature: 0.01 #0.07
-  write_temperature: 0.02 #0.14
+  read_temperature: 0.03 #0.07
+  write_temperature: 0.06 #0.14
   use_topk: false
   topk: 16
   normalize: true

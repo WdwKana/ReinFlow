@@ -515,7 +515,7 @@ class VisionFlowMLP(nn.Module):
         if self.num_img ==2:  # TODO: properly handle multiple images
             rgb1 = rgb[:, 0]
             rgb2 = rgb[:, 1]
-            if self.augment:
+            if self.augment and self.training:
                 rgb1 = self.aug(rgb1)
                 rgb2 = self.aug(rgb2)
             feat1 = self.backbone.forward(rgb1)
@@ -526,7 +526,7 @@ class VisionFlowMLP(nn.Module):
             
             feat = torch.cat([feat1, feat2], dim=-1)
         elif self.num_img ==1:  # single image
-            if self.augment:
+            if self.augment and self.training:
                 rgb = self.aug(rgb)
             feat = self.backbone.forward(rgb)
             # compress

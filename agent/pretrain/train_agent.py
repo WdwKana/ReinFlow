@@ -115,29 +115,53 @@ class PreTrainAgent:
         self.val_freq = cfg.train.get("val_freq", 100)
         
         # Build dataset
+        self.use_memory = cfg.get('use_memory', False)
         self.dataset_train = hydra.utils.instantiate(cfg.train_dataset)
         print(f"dataset_train={len(self.dataset_train)}")
-        self.dataloader_train = torch.utils.data.DataLoader(
-            self.dataset_train,
-            batch_size=self.batch_size,
-            num_workers=4 if self.dataset_train.device == "cpu" else 0,
-            shuffle=True,
-            pin_memory=True if self.dataset_train.device == "cpu" else False,
-            drop_last=True # revised by ReinFlow Authors when debugging flow-matching shortcut. 
-        )
-        self.dataloader_val = None
-        if "train_split" in cfg.train and cfg.train.train_split < 1:
-            val_indices = self.dataset_train.set_train_val_split(cfg.train.train_split)
-            self.dataset_val = deepcopy(self.dataset_train)
-            self.dataset_val.set_indices(val_indices)
-            self.dataloader_val = torch.utils.data.DataLoader(
-                self.dataset_val,
+        if self.use_memory:
+            self.dataloader_train = torch.utils.data.DataLoader(
+                self.dataset_train,
                 batch_size=self.batch_size,
-                num_workers=4 if self.dataset_val.device == "cpu" else 0,
-                shuffle=True,
-                pin_memory=True if self.dataset_val.device == "cpu" else False,
+                num_workers=4 if self.dataset_train.device == "cpu" else 0,
+                shuffle=False,
+                pin_memory=True if self.dataset_train.device == "cpu" else False,
                 drop_last=True # revised by ReinFlow Authors when debugging flow-matching shortcut. 
             )
+            self.dataloader_val = None
+            if "train_split" in cfg.train and cfg.train.train_split < 1:
+                val_indices = self.dataset_train.set_train_val_split(cfg.train.train_split)
+                self.dataset_val = deepcopy(self.dataset_train)
+                self.dataset_val.set_indices(val_indices)
+                self.dataloader_val = torch.utils.data.DataLoader(
+                    self.dataset_val,
+                    batch_size=self.batch_size,
+                    num_workers=4 if self.dataset_val.device == "cpu" else 0,
+                    shuffle=False,
+                    pin_memory=True if self.dataset_val.device == "cpu" else False,
+                    drop_last=True # revised by ReinFlow Authors when debugging flow-matching shortcut. 
+                )
+        else:
+            self.dataloader_train = torch.utils.data.DataLoader(
+                self.dataset_train,
+                batch_size=self.batch_size,
+                num_workers=4 if self.dataset_train.device == "cpu" else 0,
+                shuffle=True,
+                pin_memory=True if self.dataset_train.device == "cpu" else False,
+                drop_last=True # revised by ReinFlow Authors when debugging flow-matching shortcut. 
+            )
+            self.dataloader_val = None
+            if "train_split" in cfg.train and cfg.train.train_split < 1:
+                val_indices = self.dataset_train.set_train_val_split(cfg.train.train_split)
+                self.dataset_val = deepcopy(self.dataset_train)
+                self.dataset_val.set_indices(val_indices)
+                self.dataloader_val = torch.utils.data.DataLoader(
+                    self.dataset_val,
+                    batch_size=self.batch_size,
+                    num_workers=4 if self.dataset_val.device == "cpu" else 0,
+                    shuffle=True,
+                    pin_memory=True if self.dataset_val.device == "cpu" else False,
+                    drop_last=True # revised by ReinFlow Authors when debugging flow-matching shortcut. 
+                )
         
         # optimizer and lr scheduler
         self.optimizer = torch.optim.AdamW(
