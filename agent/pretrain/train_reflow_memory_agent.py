@@ -25,6 +25,7 @@
 """
 Pre-training ReFlow policy
 """
+import os
 import logging
 import torch
 log = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class TrainReFlowAgent(PreTrainAgent):
         super().__init__(cfg)
         self.model: ReFlow
         self.ema_model: ReFlow
-        self.wm_cache = {}
+        self._wm_cache = {}
         
         self.verbose_train=False #True #False #True #False #True #False
         self.verbose_loss= True #False #False #True #False #True #False # True
@@ -52,6 +53,7 @@ class TrainReFlowAgent(PreTrainAgent):
             normalize=cfg.memory.normalize,
             device=self.device,
         )
+        self.wm = self.wm.to(self.device)
         
         if self.test_in_mujoco:
             self.test_log_all = True
@@ -103,9 +105,12 @@ class TrainReFlowAgent(PreTrainAgent):
         self._restore_memory(episode_id, episode_start)
         cond['wm'] = self.wm
         (xt, t), v = self.model.generate_target(act)  # here *batch_train = actions, observation, according to StitchedSequenceDataset
-        if self.training:
-            self._stash_memory(episode_id, episode_end)
+
         loss= self.model.loss(xt, t, cond, v)
+        if self.model.training:
+            with torch.no_grad():
+                self.wm.memory = self.wm.memory.detach()
+            self._stash_memory(episode_id, episode_end)
         return loss
     
     def inference(self, cond:dict):

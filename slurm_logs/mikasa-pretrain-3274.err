@@ -1,0 +1,78 @@
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/cuda/__init__.py:54: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/sapien/_vulkan_tricks.py:37: UserWarning: Failed to find Vulkan ICD file. This is probably due to an incorrect or partial installation of the NVIDIA driver. SAPIEN will attempt to provide an ICD file anyway but it may not work.
+  warn(
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.5
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+  0%|          | 0/2000 [00:00<?, ?it/s]  0%|          | 0/2000 [00:00<?, ?it/s]
+Error executing job with overrides: ['wandb.offline_mode=True']
+Traceback (most recent call last):
+  File "/local/s4176650/ReinFlow/script/run.py", line 151, in <module>
+    main()
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 223, in run_and_report
+    raise ex
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/_internal/hydra.py", line 132, in run
+    _ = ret.return_value
+        ^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/s4176650/ReinFlow/script/run.py", line 147, in main
+    agent.run()
+  File "/local/s4176650/ReinFlow/agent/pretrain/train_agent.py", line 370, in run
+    loss_train = self.get_loss(batch_train)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/s4176650/ReinFlow/agent/pretrain/train_reflow_memory_agent.py", line 108, in get_loss
+    loss= self.model.loss(xt, t, cond, v)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/s4176650/ReinFlow/model/flow/reflow.py", line 170, in loss
+    v_hat = self.network(xt, t, obs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1511, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1520, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/s4176650/ReinFlow/model/flow/mlp_memorybank.py", line 546, in forward
+    feat = cond['wm'](feat, write=self.training)  # read and write and return enhanced patch representation
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1511, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1520, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/s4176650/ReinFlow/model/common/learned_memory.py", line 270, in forward
+    q_r = self.read_query(memory_with_bias)          # [B, S, E]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1511, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1520, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/s4176650/.conda/envs/mikasa/lib/python3.11/site-packages/torch/nn/modules/linear.py", line 116, in forward
+    return F.linear(input, self.weight, self.bias)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu! (when checking argument for argument mat2 in method wrapper_CUDA_mm)
+srun: error: netherite: task 0: Exited with exit code 1

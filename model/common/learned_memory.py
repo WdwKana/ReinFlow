@@ -311,7 +311,8 @@ class PatchWorkingMemory(nn.Module):
 
         # 使用更新后的 memory 进行读出
         read_out = torch.einsum("bps,bse->bpe", w, memory)  # [B, P, E]
-        enhanced = tokens + self.residual_scale * read_out
+        #enhanced = tokens + self.residual_scale * read_out
+        enhanced = read_out
 
         if self._debug_hook is not None:
             payload = {
