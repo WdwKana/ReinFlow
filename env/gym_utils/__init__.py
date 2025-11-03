@@ -129,7 +129,7 @@ def make_mikasa_efficient(
     return env
 
 '''
-    # 添加必要的接口方法以保持兼容性
+    
     class CompatibleVectorEnv:
         def __init__(self, env):
             self.env = env
@@ -139,38 +139,36 @@ def make_mikasa_efficient(
             return getattr(self.env, name)
             
         def seed(self, seeds):
-            """保持与原有 seed 接口兼容"""
+            ""
             if hasattr(self.env, 'seed'):
                 return self.env.seed(seeds)
             return [None] * self.num_envs
             
         def reset_arg(self, options_list=None):
-            """保持与原有 reset_arg 接口兼容"""
+           
             if options_list is None:
                 options_list = [{}] * self.num_envs
             
-            # 调用环境的reset方法
+           
             result = self.env.reset()
             
-            # 处理可能的tuple返回值 (obs, info)
+            
             if isinstance(result, tuple) and len(result) == 2:
                 obs, info = result
-                return obs  # 只返回观察，忽略info
+                return obs  
             else:
-                return result  # 直接返回观察
+                return result 
             
         def reset_one_arg(self, env_ind, options=None):
-            """保持与原有 reset_one_arg 接口兼容"""
-            # 对于向量化环境，这个方法可能需要特殊处理
-            # 暂时返回全部重置的结果
+
             result = self.env.reset()
             
-            # 处理可能的tuple返回值 (obs, info)
+            
             if isinstance(result, tuple) and len(result) == 2:
                 obs, info = result
-                return obs  # 只返回观察，忽略info
+                return obs  
             else:
-                return result  # 直接返回观察
+                return result  
     
     return CompatibleVectorEnv(env)
 '''

@@ -11,7 +11,7 @@ class LearnedWorkingMemoryLite(nn.Module):
         super().__init__()
         self.E = int(embed_dim)
         self.T = float(temperature)
-        self.Tw = float(write_temperature or (self.T * 2.0))  # 写温度默认更高
+        self.Tw = float(write_temperature or (self.T * 2.0))  
         self.alpha_min = float(alpha_min)
         self.alpha_max = float(alpha_max)
         self.normalize = normalize
@@ -309,7 +309,7 @@ class PatchWorkingMemory(nn.Module):
             memory = memory * (1.0 - erase_vec) + add
             self.memory = memory
 
-        # 使用更新后的 memory 进行读出
+        
         read_out = torch.einsum("bps,bse->bpe", w, memory)  # [B, P, E]
         #enhanced = tokens + self.residual_scale * read_out
         enhanced = read_out

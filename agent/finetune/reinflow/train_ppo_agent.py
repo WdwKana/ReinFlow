@@ -298,7 +298,8 @@ class TrainPPOAgent(TrainAgent):
         self.cnt_train_step = 0
         self.last_itr_eval = False
         self.done_venv = np.zeros((1,self.n_envs))
-    
+        self.eval_done_venv = np.zeros((1,self.eval_n_envs))
+    '''
     def reset_env(self, buffer_device='cpu'):
         # set_seed_everywhere(self.seed)
         # Reset env before iteration starts (1) if specified, (2) at eval mode, or (3) right after eval mode
@@ -315,7 +316,38 @@ class TrainPPOAgent(TrainAgent):
                 self.buffer.firsts_trajs[0] = self.done_venv
             else:
                 self.buffer.firsts_trajs[0] = torch.from_numpy(self.done_venv).float().to(buffer_device)
-    
+    '''
+    def reset_env(
+        self,
+        buffer_device='cpu',
+        *,
+        venv=None,
+        done_cache=None,
+        seed=None,
+        force_reset=False,
+        **reset_kwargs,
+    ):
+        env = venv or self.venv
+        done_holder = done_cache if done_cache is not None else self.done_venv
+
+        should_reset = (
+            force_reset
+            or self.reset_at_iteration
+            or self.eval_mode
+            or self.last_itr_eval
+        )
+
+        if should_reset:
+            if seed is not None:
+                reset_kwargs.setdefault("seed", seed)
+            self.prev_obs_venv = self.reset_env_all(venv=env, **reset_kwargs)
+            self.buffer.firsts_trajs[0] = 1
+            done_holder[...] = 0
+        else:
+            if buffer_device == 'cpu':
+                self.buffer.firsts_trajs[0] = done_holder
+            else:
+                self.buffer.firsts_trajs[0] = torch.from_numpy(done_holder).float().to(buffer_device)
     def save_model(self):
         """
         overload. 

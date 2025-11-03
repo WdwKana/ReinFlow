@@ -44,6 +44,8 @@ class TrainAgent:
         self.device = cfg.device
         self.seed=self.cfg.get('seed', 42)        
         set_seed_everywhere(self.seed)
+        self._train_seeded = False
+        self._eval_seeded = False
         '''
         #CSV train_log
         self.enable_csv_logging = cfg.train.get("enable_csv_logging", True)
@@ -106,10 +108,18 @@ class TrainAgent:
             **cfg.env.specific if "specific" in cfg.env else {},
         )
         '''
+        self.eval_n_envs = cfg.env.get("eval_n_envs", cfg.env.n_envs)
 
         if env_type == "mikasa":
-            
             from env.gym_utils import make_mikasa_efficient
+            self.eval_venv = make_mikasa_efficient(
+                env_name=cfg.env.name,
+                num_envs=self.eval_n_envs,
+                wrappers=cfg.env.get("wrappers", None),
+                use_image_obs=cfg.env.get("use_image_obs", False),
+                max_episode_steps=cfg.env.max_episode_steps,
+                **cfg.env.get("specific", {})
+            )
             self.venv = make_mikasa_efficient(
                 env_name=cfg.env.name,
                 num_envs=cfg.env.n_envs,
@@ -258,18 +268,19 @@ class TrainAgent:
         return obs_venv
     '''
    
-    def reset_env_all(self, verbose=False, **kwargs):
+    def reset_env_all(self, verbose=False, venv=None, **kwargs):
         print(f"DEBUG: Calling self.venv.reset() with kwargs: {kwargs}")
         print(f"DEBUG: self.venv type: {type(self.venv)}")
+        env = venv or self.venv
+        result = env.reset(**kwargs)
+        #result = self.venv.reset(**kwargs)
         
-        result = self.venv.reset(**kwargs)
-        
-        print(f"DEBUG: reset result type: {type(result)}")
-        print(f"DEBUG: reset result: {result}")
+        #print(f"DEBUG: reset result type: {type(result)}")
+        #print(f"DEBUG: reset result: {result}")
         
         if isinstance(result, tuple):
             obs, info = result
-            print(f"DEBUG: obs type: {type(obs)}")
+            #print(f"DEBUG: obs type: {type(obs)}")
             if isinstance(obs, dict):
                 print(f"DEBUG: obs keys: {list(obs.keys())}")
             return obs

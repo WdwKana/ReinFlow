@@ -24,8 +24,7 @@ method1_name = "Reinflow-seed33_1"
 # ]
 # InterceptSlow-v0
 method1_files = [
-"log/mikasa/finetune/RememberShapeAndColor3x3-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-02__tanh_10-02-15_33/training_metrics.csv"]
-
+"log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-03_00-25-48_33/training_metrics.csv"]
 # 方法2的三个种子文件路径
 method2_name = "Reinflow-seed33_2"
 # SeqOfColors3-v0
@@ -46,8 +45,7 @@ method2_name = "Reinflow-seed33_2"
 # ]
 # InterceptSlow-v0
 method2_files = [
-"log/mikasa/finetune/RememberShapeAndColor3x3-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-02__tanh_10-40-08_33/training_metrics.csv"]
-
+"log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-03_00-28-02_33/training_metrics.csv"]
 # 数据模式: "train" 或 "eval"
 mode = "eval"
 
@@ -55,13 +53,13 @@ mode = "eval"
 metric = "success_end"
 
 # 任务名称（用于图表标题）
-task_name = "RememberShapeAndColor3x3-v0"
+task_name = "RememberShapeAndColor3x2-v0"
 
 # ============ 数据处理和绘图 ============
 
 # 指标名称映射
 metric_mapping = {
-    "episode": "avg_episode_reward",
+    "return": "avg_episode_reward",
     "success": "success_rate_once",
     "success_end": "success_rate_at_end"
 }
@@ -110,7 +108,7 @@ plt.fill_between(steps1,
                  np.array(mean1) + np.array(sem1), 
                  alpha=0.2)
 
-plt.plot(steps2, mean2, label=f'{method2_name}(ours)', linewidth=2)
+plt.plot(steps2, mean2, label=f'{method2_name}', linewidth=2)
 plt.fill_between(steps2, 
                  np.array(mean2) - np.array(sem2), 
                  np.array(mean2) + np.array(sem2), 
@@ -118,7 +116,7 @@ plt.fill_between(steps2,
 
 # 图表设置
 metric_labels = {
-    "episode": "Average Episode Reward",
+    "return": "Average Episode Reward",
     "success": "Success Rate Once",
     "success_end": "Success Rate at End"
 }

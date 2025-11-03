@@ -39,6 +39,7 @@ max_std: 0.14
 env:
   env_type: mikasa 
   n_envs: 200 #the intial one is 50
+  eval_n_envs: 16
   name: ${env_name}
   best_reward_threshold_for_success: 1
   max_episode_steps: 60
