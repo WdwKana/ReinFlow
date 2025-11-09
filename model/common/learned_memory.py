@@ -313,14 +313,14 @@ class PatchWorkingMemory(nn.Module):
             self.memory = memory
 
         
-        #read_out = torch.einsum("bps,bse->bpe", w, memory)  # [B, P, E]
-        read_out = torch.einsum("bps,bse->bpe", w_beta, memory)  # [B, P, E]
+        read_out = torch.einsum("bps,bse->bpe", w, memory)  # [B, P, E]
+        #read_out = torch.einsum("bps,bse->bpe", w_beta, memory)  # [B, P, E]
         enhanced = tokens + self.residual_scale * read_out
         #enhanced = read_out
 
         if self._debug_hook is not None:
             payload = {
-                "weights": w_beta.detach(),
+                "weights": w.detach(),
                 "read_out": read_out.detach(),
                 "memory": memory.detach(),
             }
