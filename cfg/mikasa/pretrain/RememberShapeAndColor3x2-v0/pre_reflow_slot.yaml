@@ -28,10 +28,10 @@ defaults:
 hydra:
   run:
     dir: ${logdir}
-_target_: agent.pretrain.train_reflow_agent.TrainReFlowAgent
+_target_: agent.pretrain.train_reflow_slot_agent.TrainReFlowAgent
 name: ${env}_pre_reflow_mlp_slot_img_ta${horizon_steps}_td${denoising_steps}
 logdir: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/${env}/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-train_dataset_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/${env}/train_chw_cam0_clipped.npz
+train_dataset_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_clipped_tanh.npz
 
 # 
 denoising_steps: 100
@@ -62,22 +62,23 @@ train:
 model:
   _target_: model.flow.reflow.ReFlow
   network:
-    _target_: model.flow.mlp_flow.SlotVisionFlowMLP
+    _target_: model.flow.mlp_memorybank.VisionMemSlotFlowMLP
     backbone:
-      _target_: model.common.slot_attention.SlotAttentionEncoder
+      _target_: model.common.vit.VitEncoder
       obs_shape: ${shape_meta.obs.rgb.shape}
       num_channel: ${eval:'${shape_meta.obs.rgb.shape[0]} * ${img_cond_steps}'} # each image patch is history concatenated
       img_h: ${shape_meta.obs.rgb.shape[1]}
       img_w: ${shape_meta.obs.rgb.shape[2]}
       cfg:
-        num_slots: 7
-        num_iterations: 3
-        hid_dim: 64
-        pretrained_path: "${oc.env:SLOT_ATTENTION_DIR}/tmp/model_l40s_1.ckpt"  # 修改为您的预训练模型路径
-        freeze_encoder: true
-        use_slots_as_patches: true
+        patch_size: 8
+        depth: 1
+        embed_dim: 128
+        num_heads: 4
+        embed_style: embed2
+        embed_norm: 0
     augment: true
-    slot_feature_dim: 128  # 可选：压缩slot特征到128维，设为null表示不压缩(448维)
+    num_slots: 8
+    slot_dim: 128
     time_dim: 32
     mlp_dims: [512, 512, 512]
     residual_style: true
@@ -96,11 +97,12 @@ model:
 ema:
   decay: 0.995
 train_dataset:
-  _target_: agent.dataset.sequence.StitchedSequenceDataset
+  #_target_: agent.dataset.sequence.StitchedSequenceDataset
+  _target_: agent.dataset.mem_sequence.StitchedSequenceMemoryDataset
   use_img: true
   dataset_path: ${train_dataset_path}
   horizon_steps: ${horizon_steps}
-  max_n_episodes: 100
+  max_n_episodes: 600
   cond_steps: ${cond_steps}
   img_cond_steps: ${img_cond_steps}
   device: ${device}

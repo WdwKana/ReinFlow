@@ -166,19 +166,47 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
         #from model.common.learned_memory import PatchWorkingMemory
         #wm = LearnedWorkingMemoryLite(embed_dim=128, temperature=0.07, normalize=True, device=self.device)
         #wm = WorkingMemory(embed_dim=128, ema=0.9, temperature=0.07, normalize=True, device=self.device)
-        
-        from model.common.learned_memory import PatchWorkingMemory
+        mem_type = getattr(self.memory_cfg, "type", "action")  # 'action' 或 'shm'
 
-        self.wm = PatchWorkingMemory(
-            embed_dim=self.memory_cfg.embed_dim,
-            num_slots=self.model.actor_ft.policy.backbone.num_patch,
-            read_temperature=self.memory_cfg.read_temperature,
-            write_temperature=self.memory_cfg.write_temperature,
-            use_topk=self.memory_cfg.use_topk,
-            topk=self.memory_cfg.topk,
-            normalize=self.memory_cfg.normalize,
-            device=self.device,
-        ).to(self.device)
+        if self.model.actor_ft.policy.use_action_query:
+            if mem_type == "shm":
+                from model.common.learned_memory import PatchSHMWorkingMemory
+                self.wm = PatchSHMWorkingMemory(
+                    embed_dim=self.memory_cfg.embed_dim,
+                    num_slots=self.model.actor_ft.policy.backbone.num_patch,
+                    read_temperature=self.memory_cfg.read_temperature,
+                    write_temperature=self.memory_cfg.write_temperature,
+                    use_topk=self.memory_cfg.use_topk,
+                    topk=self.memory_cfg.topk,
+                    normalize=self.memory_cfg.normalize,
+                    add_space=getattr(self.memory_cfg, "add_space", 7),
+                    device=self.device,
+                ).to(self.device)
+            else:
+                from model.common.learned_memory import PatchActionWorkingMemory
+                self.wm = PatchActionWorkingMemory(
+                    embed_dim=self.memory_cfg.embed_dim,
+                    num_slots=self.model.actor_ft.policy.backbone.num_patch,
+                    read_temperature=self.memory_cfg.read_temperature,
+                    write_temperature=self.memory_cfg.write_temperature,
+                    use_topk=self.memory_cfg.use_topk,
+                    topk=self.memory_cfg.topk,
+                    normalize=self.memory_cfg.normalize,
+                    device=self.device,
+                ).to(self.device)
+        else:
+            from model.common.learned_memory import PatchWorkingMemory
+            self.wm = PatchWorkingMemory(
+                embed_dim=self.memory_cfg.embed_dim,
+                num_slots=self.model.actor_ft.policy.backbone.num_patch,
+                read_temperature=self.memory_cfg.read_temperature,
+                write_temperature=self.memory_cfg.write_temperature,
+                use_topk=self.memory_cfg.use_topk,
+                topk=self.memory_cfg.topk,
+                normalize=self.memory_cfg.normalize,
+                device=self.device,
+            ).to(self.device)
+
         mem_ckpt_path = getattr(self.cfg.model, "actor_policy_path", None)
         if mem_ckpt_path:
             try:
@@ -203,133 +231,312 @@ class TrainPPOImgFlowAgent(TrainPPOFlowAgent):
             lr=self.actor_lr,
             weight_decay=self.actor_weight_decay
         )
+        '''
+        memory_params = list(self.wm.parameters())
+        actor_core = list(self.model.actor_ft.parameters())
+
+        mem_lr_scale   = float(getattr(self.memory_cfg, "lr_scale", 0.1))   # 可在 cfg.memory 里配
+        mem_warmup_itr = int(getattr(self.memory_cfg, "warmup_itr", 1000))  # 先冻 N 个迭代
+
+        self._mem_warmup_itr   = mem_warmup_itr
+        self._mem_lr_unfrozen  = False
+        self._mem_lr_scale     = mem_lr_scale
+
+        self.actor_optimizer = torch.optim.AdamW([
+            {"params": actor_core,    "lr": self.actor_lr,                      "weight_decay": self.actor_weight_decay},
+            {"params": memory_params, "lr": 0.0,                                "weight_decay": 0.0},  # 先冻住
+        ])
+        '''
         episode_steps = np.zeros(self.n_envs, dtype=np.int32)
         if self.resume:
             self.resume_training()
         while self.itr < self.n_train_itr:
             self.prepare_video_path()
             self.set_model_mode()
-            self.reset_env(buffer_device=self.buffer_device)
-            self.buffer.update_full_obs()
-            episode_steps[:] = 0
-            self.wm.reset(B=self.n_envs,device=self.device)
-            
-            for step in tqdm(range(self.n_steps)) if self.verbose else range(self.n_steps):
-                if not self.verbose and step % 100 == 0: print(f"Processed {step} of {self.n_steps}")
-                with torch.no_grad():
-                    #phase_ids = np.where(episode_steps < 5,0,np.where(episode_steps < 10,1,2))
+            '''
+            if (not self._mem_lr_unfrozen) and (self.itr >= self._mem_warmup_itr):
+                self.actor_optimizer.param_groups[1]["lr"] = self.actor_lr * self._mem_lr_scale
+                log.info(f"Unfroze memory params: lr={self.actor_optimizer.param_groups[1]['lr']:.3e}")
+                self._mem_lr_unfrozen = True
+            '''
+            if self.eval_mode:
+                eval_env = self.eval_venv
+                n_eval_envs = getattr(eval_env, "num_envs", self.eval_n_envs)
 
-                    ####### visual input #########################
-                    cond = {
-                        key: torch.from_numpy(self.prev_obs_venv[key])
-                        .float()
-                        .to(self.device)
-                        for key in self.obs_dims
-                    }
-                    cond['wm'] = self.wm
-                    #cond['phase_ids'] = torch.from_numpy(phase_ids).to(self.device)
-                    ## overload bug fix
-                    action_samples, chains_venv = self.get_samples(cond=cond, 
-                                                                   ret_device=self.buffer_device,
-                                                                    normalize_denoising_horizon=self.normalize_denoising_horizon,
-                                                                    normalize_act_space_dimension=self.normalize_act_space_dim, 
-                                                                    clip_intermediate_actions=self.clip_intermediate_actions,
-                                                                    account_for_initial_stochasticity=self.account_for_initial_stochasticity)
-                
-                # Apply multi-step action
-                action_venv = action_samples[:, : self.act_steps]
-                obs_venv, reward_venv, terminated_venv, truncated_venv, info_venv = self.venv.step(action_venv)
-                episode_steps += self.act_steps
-                done_venv = terminated_venv | truncated_venv
-                if done_venv.any():
-                    episode_steps[done_venv] = 0
-                    self.wm.m[done_venv] = 0.0
-                # overload, bug fix
-                #self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, terminated_venv, truncated_venv)
-                
-                # add success info
-                # extract success info from info
-                success_once_venv = np.zeros(self.n_envs, dtype=bool)
-                success_at_end_venv = np.zeros(self.n_envs, dtype=bool)
-                episode_return_venv = np.zeros(self.n_envs, dtype=float)
-                episode_length_venv = np.zeros(self.n_envs, dtype=int)
-                episode_finished_mask_venv = np.zeros(self.n_envs, dtype=bool)
-                has_final_info = isinstance(info_venv, dict) and '_final_info' in info_venv
-                if has_final_info:
-                    mask = info_venv['_final_info']
-                    if isinstance(mask, torch.Tensor):
-                        mask = mask.detach().cpu().numpy().astype(bool)
-                    
-                    if mask.any():  
-                        episode_return_venv[mask] = reward_venv[mask]
-                        episode_finished_mask_venv[mask] = True
-                        final_info = info_venv.get('final_info', {})
-                        episode_info = final_info.get('episode', {})
-                        print(list(episode_info.keys()))
-                        #succ = episode_info.get('success_at_end', episode_info.get('success_once', None))
-                        succ_once = episode_info.get('success_once', None)
-                        ep_return = episode_info.get('return', None)
-                        ep_length = episode_info.get('episode_len', None)
-                        if succ_once is not None:
-                            if isinstance(succ_once, torch.Tensor):
-                                succ_once = succ_once.detach().cpu().numpy().astype(bool)
-                            success_once_venv[mask] = succ_once[mask]
-                        succ_at_end = episode_info.get('success_at_end', None)
-                        if succ_at_end is not None:
-                            if isinstance(succ_at_end, torch.Tensor):
-                                succ_at_end = succ_at_end.detach().cpu().numpy().astype(bool)
-                            success_at_end_venv[mask] = succ_at_end[mask]
-                        if ep_return is not None:
-                            if isinstance(ep_return, torch.Tensor):
-                                ep_return = ep_return.detach().cpu().numpy().astype(float)
-                            episode_return_venv[mask] = ep_return[mask]
-                        if ep_length is not None:
-                            if isinstance(ep_length, torch.Tensor):
-                                ep_length = ep_length.detach().cpu().numpy().astype(int)
-                            episode_length_venv[mask] = ep_length[mask]
-                        
-                        # Debug output for single env case
-                        #if self.n_envs == 1:
-                        #    print(f"[CHK2] Success extraction: has_final_info={has_final_info}, mask={mask[0] if len(mask) > 0 else 'N/A'}, episode_keys={list(episode_info.keys())}, success_value={success_venv[0]}")
+                seed = None
+                if not self._eval_seeded:
+                    seed = self.seed
+                    self._eval_seeded = True
+
+                self.reset_env(
+                    buffer_device=self.buffer_device,
+                    venv=eval_env,
+                    done_cache=self.eval_done_venv,
+                    seed=seed,
+                )
+                self.wm.reset(B=n_eval_envs, device=self.device)
+
+                episode_return = np.zeros(n_eval_envs, dtype=float)
+                episode_best = np.full(n_eval_envs, -np.inf, dtype=float)
+                episode_length = np.zeros(n_eval_envs, dtype=int)
+
+                finished_returns = []
+                finished_best = []
+                finished_lengths = []
+                finished_success_once = []
+                finished_success_end = []
+
+                for step in tqdm(range(self.n_steps)) if self.verbose else range(self.n_steps):
+                    if not self.verbose and step % 100 == 0:
+                        print(f"Processed {step} of {self.n_steps}")
+
+                    with torch.no_grad():
+                        cond = {
+                            key: torch.from_numpy(self.prev_obs_venv[key]).float().to(self.device)
+                            for key in self.obs_dims
+                        }
+                        cond["wm"] = self.wm
+                        action_samples, _ = self.get_samples(
+                            cond=cond,
+                            ret_device=self.buffer_device,
+                            normalize_denoising_horizon=self.normalize_denoising_horizon,
+                            normalize_act_space_dimension=self.normalize_act_space_dim,
+                            clip_intermediate_actions=self.clip_intermediate_actions,
+                            account_for_initial_stochasticity=self.account_for_initial_stochasticity,
+                        )
+
+                    action_venv = action_samples[:, : self.act_steps]
+                    obs_venv, reward_venv, terminated_venv, truncated_venv, info_venv = eval_env.step(action_venv)
+
+                    episode_return += reward_venv
+                    episode_best = np.maximum(episode_best, reward_venv)
+                    episode_length += 1
+                    self.prev_obs_venv = obs_venv
+
+                    done_venv = terminated_venv | truncated_venv
+                    if done_venv.any():
+                        self.wm.m[done_venv] = 0.0
+
+                    has_final_info = isinstance(info_venv, dict) and "_final_info" in info_venv
+                    if has_final_info:
+                        mask = info_venv["_final_info"]
+                        if isinstance(mask, torch.Tensor):
+                            mask = mask.detach().cpu().numpy().astype(bool)
+                        if mask.any():
+                            episode_dict = info_venv.get("final_info", {}).get("episode", {})
+
+                            def to_numpy(item, dtype):
+                                if item is None:
+                                    return None
+                                if isinstance(item, torch.Tensor):
+                                    item = item.detach().cpu().numpy()
+                                return item.astype(dtype)
+
+                            succ_once = to_numpy(episode_dict.get("success_once"), bool)
+                            succ_end = to_numpy(episode_dict.get("success_at_end"), bool)
+                            returns = to_numpy(episode_dict.get("return"), float)
+                            lengths = to_numpy(episode_dict.get("episode_len"), int)
+
+                            finished_returns.extend(
+                                episode_return[mask] if returns is None else returns[mask]
+                            )
+                            finished_best.extend(episode_best[mask] / self.act_steps)
+                            finished_lengths.extend(
+                                episode_length[mask] * self.act_steps if lengths is None else lengths[mask]
+                            )
+                            if succ_once is not None:
+                                finished_success_once.extend(succ_once[mask])
+                            if succ_end is not None:
+                                finished_success_end.extend(succ_end[mask])
+
+                            episode_return[mask] = 0.0
+                            episode_best[mask] = -np.inf
+                            episode_length[mask] = 0
+                            self.wm.m[mask] = 0.0
+
+                num_finished = len(finished_returns)
+                if num_finished:
+                    returns_arr = np.asarray(finished_returns, dtype=float)
+                    best_arr = np.asarray(finished_best, dtype=float)
+                    length_arr = np.asarray(finished_lengths, dtype=float)
+
+                    self.buffer.avg_episode_reward = float(returns_arr.mean())
+                    self.buffer.std_episode_reward = float(returns_arr.std())
+                    self.buffer.avg_best_reward = float(best_arr.mean())
+                    self.buffer.std_best_reward = float(best_arr.std())
+                    self.buffer.avg_episode_length = float(length_arr.mean())
+                    self.buffer.std_episode_length = float(length_arr.std())
+
+                    if finished_success_once:
+                        success_once_arr = np.asarray(finished_success_once, dtype=float)
+                        self.buffer.success_rate_once = float(success_once_arr.mean())
+                        self.buffer.std_success_rate_once = float(success_once_arr.std())
+                    else:
+                        self.buffer.success_rate_once = 0.0
+                        self.buffer.std_success_rate_once = 0.0
+
+                    if finished_success_end:
+                        success_end_arr = np.asarray(finished_success_end, dtype=float)
+                        self.buffer.success_rate_at_end = float(success_end_arr.mean())
+                        self.buffer.std_success_rate_at_end = float(success_end_arr.std())
+                    else:
+                        self.buffer.success_rate_at_end = 0.0
+                        self.buffer.std_success_rate_at_end = 0.0
                 else:
-                    # Try direct success from info
-                    if isinstance(info_venv, list) and len(info_venv) > 0:
-                        success_once_venv[0] = info_venv[0]['success_once']
-                        success_at_end_venv[0] = info_venv[0]['success_at_end']
-                        #if self.n_envs == 1:
-                        #    print(f"[CHK2] Success from direct info: success={success_venv[0]}")
-                    #elif self.n_envs == 1:
-                        #print(f"[CHK2] No success info found in info_venv structure")
+                    self.buffer.avg_episode_reward = 0.0
+                    self.buffer.std_episode_reward = 0.0
+                    self.buffer.avg_best_reward = 0.0
+                    self.buffer.std_best_reward = 0.0
+                    self.buffer.avg_episode_length = 0.0
+                    self.buffer.std_episode_length = 0.0
+                    self.buffer.success_rate_once = 0.0
+                    self.buffer.std_success_rate_once = 0.0
+                    self.buffer.success_rate_at_end = 0.0
+                    self.buffer.std_success_rate_at_end = 0.0
 
-                
-                self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, 
-                                terminated_venv, truncated_venv, success_once_venv, success_at_end_venv, episode_return_venv, episode_length_venv, episode_finished_mask_venv)
-                
-                self.prev_obs_venv = obs_venv
-                self.cnt_train_step+= self.n_envs * self.act_steps if not self.eval_mode else 0
-            
-            self.buffer.summarize_episode_reward()
+                self.buffer.num_episode_finished = num_finished
 
-            if not self.eval_mode:
-                ### bug fix
-                self.buffer: PPOFlowImgBufferGPU
-                self.buffer.update_img(obs_venv, self.model)
-                self.agent_update(verbose=self.verbose)
-            
-            self.log()
-            self.update_lr()
-            self.adjust_finetune_schedule()# update finetune scheduler of ReFlow Policy
-            self.save_model()
-                              
-            
-            self.itr += 1
-            # early stopping
-            if self.use_early_stop and (self.buffer.success_rate < 0.05 or self.buffer.avg_episode_reward < 2.0):
-                log.info(f"Your finetuning failed. success_rate={self.buffer.success_rate*100:.2f}% and avg_episode_reward={self.buffer.avg_episode_reward:.2f}")
-                exit()
-            
-            self.clear_cache()
-            self.inspect_memory()
+                self.log()
+                self.update_lr()
+                self.adjust_finetune_schedule()
+                self.save_model()
+                self.itr += 1
+                self.clear_cache()
+                self.inspect_memory()
+                continue
+            else:
+                seed = None
+                if not self._train_seeded:
+                    seed = self.seed
+                    self._train_seeded = True
+
+                self.reset_env(
+                    buffer_device=self.buffer_device,
+                    venv=self.venv,
+                    done_cache=self.done_venv,
+                    seed=seed,
+                )
+                #self.reset_env(buffer_device=self.buffer_device)
+                self.buffer.update_full_obs()
+                episode_steps[:] = 0
+                self.wm.reset(B=self.n_envs,device=self.device)
+                
+                for step in tqdm(range(self.n_steps)) if self.verbose else range(self.n_steps):
+                    if not self.verbose and step % 100 == 0: print(f"Processed {step} of {self.n_steps}")
+                    with torch.no_grad():
+                        #phase_ids = np.where(episode_steps < 5,0,np.where(episode_steps < 10,1,2))
+
+                        ####### visual input #########################
+                        cond = {
+                            key: torch.from_numpy(self.prev_obs_venv[key])
+                            .float()
+                            .to(self.device)
+                            for key in self.obs_dims
+                        }
+                        cond['wm'] = self.wm
+                        #cond['phase_ids'] = torch.from_numpy(phase_ids).to(self.device)
+                        ## overload bug fix
+                        action_samples, chains_venv = self.get_samples(cond=cond, 
+                                                                    ret_device=self.buffer_device,
+                                                                        normalize_denoising_horizon=self.normalize_denoising_horizon,
+                                                                        normalize_act_space_dimension=self.normalize_act_space_dim, 
+                                                                        clip_intermediate_actions=self.clip_intermediate_actions,
+                                                                        account_for_initial_stochasticity=self.account_for_initial_stochasticity)
+                    
+                    # Apply multi-step action
+                    action_venv = action_samples[:, : self.act_steps]
+                    obs_venv, reward_venv, terminated_venv, truncated_venv, info_venv = self.venv.step(action_venv)
+                    episode_steps += self.act_steps
+                    done_venv = terminated_venv | truncated_venv
+                    if done_venv.any():
+                        episode_steps[done_venv] = 0
+                        self.wm.m[done_venv] = 0.0
+                    # overload, bug fix
+                    #self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, terminated_venv, truncated_venv)
+                    
+                    # add success info
+                    # extract success info from info
+                    success_once_venv = np.zeros(self.n_envs, dtype=bool)
+                    success_at_end_venv = np.zeros(self.n_envs, dtype=bool)
+                    episode_return_venv = np.zeros(self.n_envs, dtype=float)
+                    episode_length_venv = np.zeros(self.n_envs, dtype=int)
+                    episode_finished_mask_venv = np.zeros(self.n_envs, dtype=bool)
+                    has_final_info = isinstance(info_venv, dict) and '_final_info' in info_venv
+                    if has_final_info:
+                        mask = info_venv['_final_info']
+                        if isinstance(mask, torch.Tensor):
+                            mask = mask.detach().cpu().numpy().astype(bool)
+                        
+                        if mask.any():  
+                            episode_return_venv[mask] = reward_venv[mask]
+                            episode_finished_mask_venv[mask] = True
+                            final_info = info_venv.get('final_info', {})
+                            episode_info = final_info.get('episode', {})
+                            print(list(episode_info.keys()))
+                            #succ = episode_info.get('success_at_end', episode_info.get('success_once', None))
+                            succ_once = episode_info.get('success_once', None)
+                            ep_return = episode_info.get('return', None)
+                            ep_length = episode_info.get('episode_len', None)
+                            if succ_once is not None:
+                                if isinstance(succ_once, torch.Tensor):
+                                    succ_once = succ_once.detach().cpu().numpy().astype(bool)
+                                success_once_venv[mask] = succ_once[mask]
+                            succ_at_end = episode_info.get('success_at_end', None)
+                            if succ_at_end is not None:
+                                if isinstance(succ_at_end, torch.Tensor):
+                                    succ_at_end = succ_at_end.detach().cpu().numpy().astype(bool)
+                                success_at_end_venv[mask] = succ_at_end[mask]
+                            if ep_return is not None:
+                                if isinstance(ep_return, torch.Tensor):
+                                    ep_return = ep_return.detach().cpu().numpy().astype(float)
+                                episode_return_venv[mask] = ep_return[mask]
+                            if ep_length is not None:
+                                if isinstance(ep_length, torch.Tensor):
+                                    ep_length = ep_length.detach().cpu().numpy().astype(int)
+                                episode_length_venv[mask] = ep_length[mask]
+                            
+                            # Debug output for single env case
+                            #if self.n_envs == 1:
+                            #    print(f"[CHK2] Success extraction: has_final_info={has_final_info}, mask={mask[0] if len(mask) > 0 else 'N/A'}, episode_keys={list(episode_info.keys())}, success_value={success_venv[0]}")
+                    else:
+                        # Try direct success from info
+                        if isinstance(info_venv, list) and len(info_venv) > 0:
+                            success_once_venv[0] = info_venv[0]['success_once']
+                            success_at_end_venv[0] = info_venv[0]['success_at_end']
+                            #if self.n_envs == 1:
+                            #    print(f"[CHK2] Success from direct info: success={success_venv[0]}")
+                        #elif self.n_envs == 1:
+                            #print(f"[CHK2] No success info found in info_venv structure")
+
+                    
+                    self.buffer.add(step, self.prev_obs_venv, chains_venv, reward_venv, 
+                                    terminated_venv, truncated_venv, success_once_venv, success_at_end_venv, episode_return_venv, episode_length_venv, episode_finished_mask_venv)
+                    
+                    self.prev_obs_venv = obs_venv
+                    self.cnt_train_step+= self.n_envs * self.act_steps if not self.eval_mode else 0
+                
+                self.buffer.summarize_episode_reward()
+
+                if not self.eval_mode:
+                    ### bug fix
+                    self.buffer: PPOFlowImgBufferGPU
+                    self.buffer.update_img(obs_venv, self.model)
+                    self.agent_update(verbose=self.verbose)
+                
+                self.log()
+                self.update_lr()
+                self.adjust_finetune_schedule()# update finetune scheduler of ReFlow Policy
+                self.save_model()
+                                
+                
+                self.itr += 1
+                # early stopping
+                if self.use_early_stop and (self.buffer.success_rate < 0.05 or self.buffer.avg_episode_reward < 2.0):
+                    log.info(f"Your finetuning failed. success_rate={self.buffer.success_rate*100:.2f}% and avg_episode_reward={self.buffer.avg_episode_reward:.2f}")
+                    exit()
+                
+                self.clear_cache()
+                self.inspect_memory()
             
     # overload to accomodate gradaccum
     def agent_update(self, verbose=True):

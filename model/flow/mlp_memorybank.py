@@ -35,6 +35,7 @@ from model.common.mlp import MLP, ResidualMLP
 from model.diffusion.modules import SinusoidalPosEmb
 from model.common.modules import SpatialEmb, RandomShiftsAug
 from model.common.vit import VitEncoder
+from model.common.learned_memory import SlotAttention
 log = logging.getLogger(__name__)
 import einops
 from typing import List
@@ -383,6 +384,7 @@ class VisionFlowMLPMembank(nn.Module):
         dropout=0,
         num_img=1,                      # currently only supports 1 or 2
         augment=False,
+        use_action_query=False,
     ):
         super().__init__()
         
@@ -397,6 +399,7 @@ class VisionFlowMLPMembank(nn.Module):
         
         # time
         self.time_dim = time_dim
+        self.use_action_query = use_action_query
         
         self.backbone = backbone
         self.mlp_dims = mlp_dims
@@ -405,6 +408,8 @@ class VisionFlowMLPMembank(nn.Module):
         self.use_layernorm = use_layernorm
         self.residual_style = residual_style
         self.spatial_emb = spatial_emb
+        if self.use_action_query:
+            self.act_to_query = nn.Linear(self.action_dim*self.horizon_steps, self.backbone.patch_repr_dim)
         
         self.dropout = dropout
         self.num_img = num_img
@@ -491,6 +496,9 @@ class VisionFlowMLPMembank(nn.Module):
         TODO long term: more flexible handling of cond
         """
         B, Ta, Da = action.shape
+        if self.use_action_query:
+            act_src = cond.get('act_x1', action)
+            act_q = self.act_to_query(act_src.view(B, -1)).float() # [B, E]
         _, T_rgb, C, H, W = cond["rgb"].shape
         # flatten chunk
         action = action.view(B, -1)
@@ -541,9 +549,13 @@ class VisionFlowMLPMembank(nn.Module):
                 # write: memory-guided selective aggregation + confidence gate (automatically adapt to each phase)
                 cond['wm'].write(feat.detach())
             '''
+            mem_write = bool(cond.get('mem_write', True))
             if 'wm' in cond and cond['wm'] is not None:
                 # enhanced_feat, attn = cond['wm'](feat, return_weights=True)
-                feat = cond['wm'](feat)  # read and write and return enhanced patch representation
+                if self.use_action_query:
+                    feat = cond['wm'](feat, action_query=act_q, write=mem_write)
+                else:
+                    feat = cond['wm'](feat, write=mem_write)  # read and write and return enhanced patch representation
                 #feat = feat + 0.1 * att_feat 
             '''   
                 phase_ids = cond.get('phase_ids', None)  # [B] tensor: 0=obs, 1=delay, 2=sel
@@ -666,76 +678,115 @@ class NoisyVisionFlowMLPMembank(NoisyFlowMLP):
         
         return vel, noise_std if learn_exploration_noise else noise_std.detach()
 
-class SlotVisionFlowMLP(nn.Module):
+
+class VisionMemSlotFlowMLP(nn.Module):
+    """With ViT backbone"""
     def __init__(
         self,
-        backbone,
+        backbone: VitEncoder,
         action_dim,
         horizon_steps,
-        cond_dim,
+        cond_dim,                       # proprioception only
+        img_cond_steps=1,
         time_dim=16,
         mlp_dims=[256, 256],
         activation_type="Mish",
         out_activation_type="Identity",
         use_layernorm=False,
         residual_style=False,
-        slot_feature_dim=None,
+        spatial_emb=0,
+        visual_feature_dim=128,         # visual feature dim
         dropout=0,
+        num_img=1,                      # currently only supports 1 or 2
         augment=False,
-        **kwargs,
+        num_slots=8,
+        slot_dim=128,
     ):
         super().__init__()
-        '''
-        super().__init__(
-        horizon_steps = horizon_steps,
-        action_dim = action_dim,
-        cond_dim = cond_dim,
-        time_dim = time_dim,
-        mlp_dims = mlp_dims,
-        activation_type = activation_type,
-        out_activation_type = out_activation_type,
-        use_layernorm = use_layernorm,
-        residual_style = residual_style,
-        )
-        '''
+        
+        # action chunk
         self.action_dim = action_dim
         self.horizon_steps = horizon_steps
-        self.cond_dim = cond_dim
-        self.time_dim = time_dim
-        #self.mlp_dims = mlp_dims
-        #self.activation_type = activation_type
-        #self.out_activation_type = out_activation_type
-        #self.use_layernorm = use_layernorm
-        #self.residual_style = residual_style
-        self.augment = augment
-        self.backbone = backbone
         self.act_dim_total = action_dim * horizon_steps
+        
+        # historical proprioception and visual inputs
+        self.prop_dim = cond_dim    
+        self.img_cond_steps = img_cond_steps
+        
+        # time
+        self.time_dim = time_dim
+        
+        self.backbone = backbone
+        self.mlp_dims = mlp_dims
+        self.activation_type = activation_type
+        self.out_activation_type = out_activation_type
+        self.use_layernorm = use_layernorm
+        self.residual_style = residual_style
+        self.spatial_emb = spatial_emb
+        self.num_slots = num_slots
+        self.slot_dim = slot_dim
+        self.dropout = dropout
+        self.num_img = num_img
+        self.augment = augment
+        
+        # vision
+        self.backbone = backbone
         if augment:
             self.aug = RandomShiftsAug(pad=4)
-        
-        if slot_feature_dim is None:
-            self.slot_feature_dim = backbone.total_slot_dim
-            self.compress = None
-        else:
-            self.slot_feature_dim = slot_feature_dim
+        if spatial_emb > 0:
+            assert spatial_emb > 1, "this is the dimension"
+            if num_img == 2:
+                self.compress1 = SpatialEmb(
+                    num_patch=self.backbone.num_patch,
+                    patch_dim=self.backbone.patch_repr_dim,
+                    prop_dim=cond_dim,
+                    proj_dim=spatial_emb,
+                    dropout=dropout,
+                )
+                self.compress2 = deepcopy(self.compress1)
+            elif num_img == 1:  # TODO: clean up
+                self.compress = SpatialEmb(
+                    num_patch=self.backbone.num_patch,
+                    patch_dim=self.backbone.patch_repr_dim,
+                    prop_dim=cond_dim,
+                    proj_dim=spatial_emb,
+                    dropout=dropout,
+                )
+            else:
+                raise NotImplementedError(f"num_img={num_img} Currently we only support 1 or 2 image inputs")
+            visual_feature_dim = spatial_emb * num_img
+        else: # spatial embedding not specified, use default value 128
             self.compress = nn.Sequential(
-                nn.Linear(backbone.total_slot_dim, slot_feature_dim),
-                nn.LayerNorm(slot_feature_dim),
+                nn.Linear(self.backbone.repr_dim, visual_feature_dim),
+                nn.LayerNorm(visual_feature_dim),
                 nn.Dropout(dropout),
                 nn.ReLU(),
             )
-        self.cond_enc_dim = self.slot_feature_dim + cond_dim
+        #self.cond_enc_dim = visual_feature_dim + self.prop_dim     # rgb and  proprioception      
+        self.cond_enc_dim = self.num_slots * self.slot_dim + self.prop_dim
+        self.slot_proj = nn.Linear(self.backbone.patch_repr_dim, self.slot_dim)
+        self.slot_attention = SlotAttention(num_slots=num_slots, dim=self.slot_dim) # SlotAttention module for updating slots
         self.time_embedding = nn.Sequential(
             SinusoidalPosEmb(time_dim),
             nn.Linear(time_dim, time_dim * 2),
             nn.Mish(),
             nn.Linear(time_dim * 2, time_dim),
         )
-        input_dim = time_dim + self.act_dim_total   + self.cond_enc_dim
-        #output_dim = self.act_dim_total
+        
+        # Flow
+        input_dim = (
+            time_dim + \
+                action_dim * horizon_steps + \
+                        self.cond_enc_dim
+        )
+        
+        # output action chunk
+        output_dim = action_dim * horizon_steps
+        
+        # velocity head
         model = ResidualMLP if residual_style else MLP
         self.mlp_mean = model(
-            [input_dim] + mlp_dims + [self.act_dim_total],
+            [input_dim] + mlp_dims + [output_dim],
             activation_type=activation_type,
             out_activation_type=out_activation_type,
             use_layernorm=use_layernorm,
@@ -745,7 +796,7 @@ class SlotVisionFlowMLP(nn.Module):
         self,
         action,
         time,
-        cond,
+        cond: dict,
         output_embedding=False,
         **kwargs,
     ):
@@ -757,74 +808,115 @@ class SlotVisionFlowMLP(nn.Module):
                 state: (B, To, Do)
                 rgb: (B, To, C, H, W)
         outputs:
-            velocity. 
-            vel: (B, Ta, Da) when output_embedding==False 
-            vel,time_emb, cond_emb: when output_embedding==False
+
+        TODO long term: more flexible handling of cond
         """
         B, Ta, Da = action.shape
+        _, T_rgb, C, H, W = cond["rgb"].shape
         # flatten chunk
         action = action.view(B, -1)
+
+        # flatten history (proprioception, here we use the raw input without encoding)
         state = cond["state"].view(B, -1)
-        rgb = cond["rgb"][:,-1]
+
+        # Take recent images --- sometimes we want to use fewer img_cond_steps than cond_steps (e.g., 1 image but 3 prio)
+        rgb = cond["rgb"][:, -self.img_cond_steps :]
+        # concatenate images in cond by channels
+        if self.num_img >1:
+            rgb = rgb.reshape(B, T_rgb, self.num_img, 3, H, W)
+            rgb = einops.rearrange(rgb, "b t n c h w -> b n (t c) h w")
+        elif self.num_img==1:
+            rgb = einops.rearrange(rgb, "b t c h w -> b (t c) h w")
+        else:
+            raise ValueError(f"self.num_img={self.num_img} <1. ")
+        # convert rgb to float32 for augmentation
         rgb = rgb.float()
-        if self.augment:
-            rgb = self.aug(rgb)
-        slot_feat = self.backbone(rgb,flatten=True)
-        if self.compress is not None:
-            slot_feat = self.compress(slot_feat)
-        cond_encoded = torch.cat([slot_feat, state], dim=-1)
+        
+        # visual and proprioceptive embeddings: get vit output - pass in two images separately
+        if self.num_img ==2:  # TODO: properly handle multiple images
+            rgb1 = rgb[:, 0]
+            rgb2 = rgb[:, 1]
+            if self.augment and self.training:
+                rgb1 = self.aug(rgb1)
+                rgb2 = self.aug(rgb2)
+            feat1 = self.backbone.forward(rgb1)
+            feat1 = self.compress1.forward(feat1, state)
+            
+            feat2 = self.backbone.forward(rgb2)
+            feat2 = self.compress2.forward(feat2, state)
+            
+            feat = torch.cat([feat1, feat2], dim=-1)
+        elif self.num_img ==1:  # single image
+            if self.augment and self.training:
+                rgb = self.aug(rgb)
+            tokens = self.backbone.forward(rgb) #[B, P, E] patch tokens
+            tokens = self.slot_proj(tokens) #[B, P, slot_dim]
+            slot_mem  = cond.get("slot_mem")
+            env_mask = cond.get("slot_env_mask")
+            if env_mask is None:
+                env_mask = cond.get("env_indices")
+            if slot_mem is not None:
+                slots = slot_mem.forward(self.slot_attention, tokens, env_indices=env_mask)
+            else:
+                slots = self.slot_attention(tokens, num_slots=self.num_slots)
+            feat = slots.flatten(1, 2) # [B, P*S]
+            '''
+            # compress
+            if isinstance(self.compress, SpatialEmb):
+                feat = self.compress.forward(feat, state)
+            else:
+                feat = feat.flatten(1, -1)
+                feat = self.compress(feat)
+            '''
+        else:
+            raise NotImplementedError(f"num_img={self.num_img} Currently we only support 1 or 2 image inputs")
+        cond_encoded = torch.cat([feat, state], dim=-1)   # visual and proprioception inputs. 
+
+        # time embedding
         time = time.view(B, 1)
         time_emb = self.time_embedding(time).view(B, self.time_dim)
+        
+        # all embeddings: time, visual-proprioceptive
         emb = torch.cat([action, time_emb, cond_encoded], dim=-1)
+
+        # velocity head
         vel = self.mlp_mean(emb)
         if output_embedding:
             return vel.view(B, Ta, Da), time_emb, cond_encoded
         return vel.view(B, Ta, Da)
 
-class NoisySlotVisionFlowMLP(NoisyFlowMLP):
+
+class NoisyVisionMemSlotFlowMLP(NoisyFlowMLP):
     def __init__(
-        self,
-        policy:SlotVisionFlowMLP,
-        denoising_steps,
-        learn_explore_noise_from,
-        inital_noise_scheduler_type,
-        min_logprob_denoising_std,
-        max_logprob_denoising_std,
-        use_time_independent_noise,
-        time_dim_explore,
-        learn_explore_time_embedding,
-        device,
-        noise_hidden_dims=None,
-        activation_type='Tanh',
+            self,
+            policy:VisionMemSlotFlowMLP,
+            denoising_steps,
+            learn_explore_noise_from,
+            inital_noise_scheduler_type,
+            min_logprob_denoising_std,
+            max_logprob_denoising_std,
+            learn_explore_time_embedding,
+            time_dim_explore,
+            use_time_independent_noise,
+            device,
+            noise_hidden_dims=None,
+            activation_type='Tanh'
     ):
         super().__init__(
-        policy = policy,
-        denoising_steps = denoising_steps,
-        learn_explore_noise_from = learn_explore_noise_from,
-        inital_noise_scheduler_type = inital_noise_scheduler_type,
-        min_logprob_denoising_std = min_logprob_denoising_std,
-        max_logprob_denoising_std = max_logprob_denoising_std,
-        learn_explore_time_embedding = learn_explore_time_embedding,
-        use_time_independent_noise = use_time_independent_noise,
-        time_dim_explore = time_dim_explore,
-        device = device,
-        noise_hidden_dims = noise_hidden_dims,
-        activation_type = activation_type,
+            policy,
+            denoising_steps,
+            learn_explore_noise_from,
+            inital_noise_scheduler_type,
+            min_logprob_denoising_std,
+            max_logprob_denoising_std,
+            learn_explore_time_embedding,
+            time_dim_explore,
+            use_time_independent_noise,
+            device,
+            noise_hidden_dims,
+            activation_type
         )
-        '''
-        if use_time_independent_noise:
-            noise_input_dim = policy.cond_enc_dim
-        else:
-            noise_input_dim = policy.time_dim + policy.cond_enc_dim
-            if learn_explore_time_embedding:
-                self.time_embedding_explore = policy.time_embedding
-        self.explore_noise_net = MLP(
-            [noise_input_dim,256,256,policy.action_dim * policy.horizon_steps],
-            activation_type=activation_type,
-            out_activation_type=out_activation_type,
-        )
-        '''
-
+    
     def forward(
         self,
         action,
@@ -832,25 +924,42 @@ class NoisySlotVisionFlowMLP(NoisyFlowMLP):
         cond,
         learn_exploration_noise=False,
         step=-1,
-        *kargs,
-    ) -> Tuple[Tensor, Tensor]:
-        
+        verbose=False,
+        **kwargs,
+    )->Tuple[Tensor, Tensor]:
+        """
+        inputs:
+            x: (B, Ta, Da)
+            time: (B,) floating point in [0,1) flow matching time
+            cond: dict with key state/rgb; more recent obs at the end
+                state: (B, To, Do)
+            step: (B,) torch.tensor, optional, flow matching inference step, from 0 to denoising_steps-1
+            *here, B is the n_envs
+        outputs:
+             vel                [B, Ta, Da]
+             noise_std          [B, Ta x Da]
+        """
         B = action.shape[0]
-        # get the velocity and the embedding
+        
+        self.policy: VisionMemSlotFlowMLP
         vel, time_emb, cond_emb = self.policy.forward(action, time, cond, output_embedding=True)
-
-        if self.initial_noise_scheduler_type == 'const' or step < self.learn_explore_noise_from:
-            noise_std = self.logprob_noise_levels[:, step].repeat(B,1)
+        
+        # noise head (for exploration). allow gradient flow.
+        if self.initial_noise_scheduler_type=='const' or step < self.learn_explore_noise_from:
+            noise_std       = self.logprob_noise_levels[:, step].repeat(B,1)
         else:
             if self.use_time_independent_noise:
-                noise_feature = cond_emb
+                noise_feature    = cond_emb
             else:
                 if self.learn_explore_time_embedding:
                     step_ts = torch.tensor(step, device = self.device).repeat(B)
                     time_emb_explore = self.time_embedding_explore(step_ts)
-                    noise_feature = torch.cat([time_emb_explore, cond_emb], dim=-1)
+                    noise_feature    = torch.cat([time_emb_explore, cond_emb], dim=-1)
                 else:
-                    noise_feature = torch.cat([time_emb.detach(), cond_emb], dim=-1)
+                    noise_feature    = torch.cat([time_emb.detach(), cond_emb], dim=-1)
+            # predict noise
             noise_std = self.explore_noise_net.forward(noise_feature=noise_feature)
+        
         return vel, noise_std if learn_exploration_noise else noise_std.detach()
-    
+
+

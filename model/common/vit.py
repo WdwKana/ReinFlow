@@ -94,7 +94,8 @@ class PatchEmbed1(nn.Module):
     def forward(self, x: torch.Tensor):
         y = self.conv(x)
         y = einops.rearrange(y, "b c h w -> b (h  w) c")
-        return y
+        return 
+        
 
 
 class PatchEmbed2(nn.Module):

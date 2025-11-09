@@ -350,6 +350,8 @@ class PPOFlow(nn.Module):
         
         for i in range(self.inference_steps):
             t = steps[:,i]
+            #if self.use_action_query:
+            #cond['mem_write'] = (i == self.inference_steps - 1) # only write to memory at the last step
             vt, nt =self.actor_ft.forward(xt, t, cond, learn_exploration_noise=False, step=i)
             xt += vt* dt
             if clip_intermediate_actions: # Discourage excessive exploration

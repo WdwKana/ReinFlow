@@ -625,35 +625,34 @@ class EvalReFlowMikasaMemAgent(EvalReFlowMikasaAgent):
         def render_map(map_2d: np.ndarray, tag: str) -> None:
             if map_2d is None:
                 return
-            # 百分位归一化（更稳），也可改回 min-max
+            
             lo, hi = np.percentile(map_2d, [2, 98])
             denom = max(hi - lo, 1e-8)
             norm = np.clip((map_2d - lo) / denom, 0, 1)
             map_uint8 = (norm * 255.0).astype(np.uint8)
 
-            # 调整到与原图同尺寸（若无原图则放大显示）
+            
             if frame_bgr is not None and target_hw is not None:
                 resized = cv2.resize(map_uint8, target_hw, interpolation=cv2.INTER_LINEAR)
             else:
                 scale = max(height, width) * 16
                 resized = cv2.resize(map_uint8, (scale, scale), interpolation=cv2.INTER_NEAREST)
 
-            # 纯热图（不叠加）
+            
             color_only = cv2.applyColorMap(resized, cv2.COLORMAP_JET)
             heat_path = os.path.join(episode_dir, f"step_{step_idx:04d}_{tag}_heat.png")
             cv2.imwrite(heat_path, color_only)
 
-            # 叠加到原图（若有原图）
+            
             if frame_bgr is not None:
                 overlay = cv2.addWeighted(frame_bgr, 0.6, color_only, 0.4, 0)
                 overlay_path = os.path.join(episode_dir, f"step_{step_idx:04d}_{tag}.png")
                 cv2.imwrite(overlay_path, overlay)
 
-        # 读出强度 |read_out|
+        
         read_map = np.linalg.norm(read_out, axis=-1).reshape(height, width)
         render_map(read_map, "read")
 
-        # 读注意力（更显著：尖锐度 peak）
         weights = entry.get("weights")
         if weights is not None:
             w = np.asarray(weights)                  # [P,S] or [P, S]
@@ -670,3 +669,47 @@ class EvalReFlowMikasaMemAgent(EvalReFlowMikasaAgent):
             if beta.ndim == 2 and beta.shape[0] == num_patches:
                 write_map = beta.max(axis=-1).reshape(height, width)
                 render_map(write_map, "write")
+        def render_map_plain(map_2d: np.ndarray, tag: str) -> None:
+            if map_2d is None:
+                return
+            lo, hi = np.percentile(map_2d, [2, 98])
+            denom = max(hi - lo, 1e-8)
+            norm = np.clip((map_2d - lo) / denom, 0, 1)
+            map_uint8 = (norm * 255.0).astype(np.uint8)
+            if target_hw is not None:
+                resized = cv2.resize(map_uint8, target_hw, interpolation=cv2.INTER_LINEAR)
+            else:
+                h2, w2 = map_uint8.shape[:2]
+                scale = max(h2, w2) * 16
+                resized = cv2.resize(map_uint8, (scale, scale), interpolation=cv2.INTER_NEAREST)
+            color_only = cv2.applyColorMap(resized, cv2.COLORMAP_JET)
+            heat_path = os.path.join(episode_dir, f"step_{step_idx:04d}_{tag}_heat.png")
+            cv2.imwrite(heat_path, color_only)
+
+        
+        mem = entry.get("memory")
+        if mem is not None:
+            M = np.asarray(mem)
+            if M.ndim == 2 and M.shape[0] > 0:  # [S,E]
+                S = M.shape[0]
+                sh, sw = self._infer_patch_grid(S)
+                if sh > 0 and sw > 0:
+                    mem_norm = np.linalg.norm(M, axis=-1).reshape(sh, sw)
+                    render_map_plain(mem_norm, "memory")
+            elif M.ndim == 1 and M.shape[0] > 0:  # [E]
+                E = M.shape[0]
+                sh, sw = self._infer_patch_grid(E)
+                if sh > 0 and sw > 0:
+                    vec_map = M.reshape(sh, sw)
+                    render_map_plain(vec_map, "memory_vec")
+
+        
+        er = entry.get("erase")
+        if er is not None:
+            EV = np.asarray(er)
+            if EV.ndim == 2 and EV.shape[0] > 0:  # [S,E]
+                S = EV.shape[0]
+                sh, sw = self._infer_patch_grid(S)
+                if sh > 0 and sw > 0:
+                    erase_norm = np.linalg.norm(EV, axis=-1).reshape(sh, sw)
+                    render_map_plain(erase_norm, "erase")

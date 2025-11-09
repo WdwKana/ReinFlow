@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # ============ 配置部分 - 直接复制粘贴文件路径 ============
 
 # 方法1的三个种子文件路径
-method1_name = "Reinflow-seed33_1"
+method1_name = "Reinflow-mem_1"
 # SeqOfColors3-v0
 # method1_files = [
 #     "log/mikasa/finetune/SeqOfColors3-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-10-11_11-23-56_42/training_metrics.csv",
@@ -24,9 +24,11 @@ method1_name = "Reinflow-seed33_1"
 # ]
 # InterceptSlow-v0
 method1_files = [
-"log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-03_00-25-48_33/training_metrics.csv"]
+"log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_from_pretrain_tanh_Temp0.05_0.1_tdf5/2025-11-08_01-02-44_33/training_metrics.csv",
+"log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_from_pretrain_tanh_Temp0.05_0.1_tdf5/2025-11-08_03-29-26_42/training_metrics.csv"]
+
 # 方法2的三个种子文件路径
-method2_name = "Reinflow-seed33_2"
+method2_name = "Reinflow-mlp"
 # SeqOfColors3-v0
 # method2_files = [
 #     "log/mikasa/finetune/SeqOfColors3-v0_ft_reflow_membank_ta4_td5_tdf5/2025-10-11_22-11-52_42/training_metrics.csv",
@@ -44,13 +46,16 @@ method2_name = "Reinflow-seed33_2"
 #     "log/mikasa/finetune/ShellGameTouch-v0_ft_reflow_membank_ta4_td5_tdf5/2025-10-15_03-31-04_42/training_metrics.csv",
 # ]
 # InterceptSlow-v0
-method2_files = [
-"log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-03_00-28-02_33/training_metrics.csv"]
+method2_files = ["log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_from_pretrain_tanh_Temp0.05_0.1_tdf5/2025-11-07_16-00-47_42/training_metrics.csv",
+"log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_from_pretrain_tanh_Temp0.05_0.1_tdf5/2025-11-08_01-02-44_33/training_metrics.csv"]
+# method2_files = [
+# "log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-03_23-17-05_33/training_metrics.csv",
+# "log/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mlp_img_ta4_td5_tdf5/2025-11-04_00-22-41_42/training_metrics.csv"]
 # 数据模式: "train" 或 "eval"
 mode = "eval"
 
 # 指标选择: "episode" (avg_episode_reward) 或 "success" (success_rate)
-metric = "success_end"
+metric = "success"
 
 # 任务名称（用于图表标题）
 task_name = "RememberShapeAndColor3x2-v0"

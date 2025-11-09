@@ -29,7 +29,7 @@ hydra:
   run:
     dir: ${logdir}
 _target_: agent.pretrain.train_reflow_memory_agent.TrainReFlowAgent
-name: ${env}_pre_reflow_mlp_img_ta${horizon_steps}_td${denoising_steps}
+name: ${env}_pre_reflow_mlp_img_ta${horizon_steps}_td${denoising_steps}_normal_mem_initial
 logdir: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/${env}/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
 #train_dataset_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/${env}/RememberShapeAndColor3x2-v0.npz
 #train_dataset_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/${env}/RememberShapeAndColor3x2-v0_train_from_begining.npz
@@ -81,6 +81,7 @@ model:
         embed_norm: 0
     img_cond_steps: ${img_cond_steps}
     augment: true
+    use_action_query: false
     spatial_emb: 128
     time_dim: 32
     mlp_dims: [512, 512, 512]
@@ -104,14 +105,14 @@ train_dataset:
   use_img: true
   dataset_path: ${train_dataset_path}
   horizon_steps: ${horizon_steps}
-  max_n_episodes: 600
+  max_n_episodes: 900
   cond_steps: ${cond_steps}
   img_cond_steps: ${img_cond_steps}
   device: ${device}
 memory:
   embed_dim: 128  
-  read_temperature: 0.04 #0.07
-  write_temperature: 0.08 #0.14
+  read_temperature: 0.05 #0.07
+  write_temperature: 0.1 #0.14
   use_topk: false
   topk: 16
   normalize: true

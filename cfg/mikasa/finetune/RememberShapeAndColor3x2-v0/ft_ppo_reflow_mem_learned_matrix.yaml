@@ -25,10 +25,11 @@ logdir: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/${env_name}_ft_reflow_mem_lea
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-10-24_00-17-11_42/checkpoint/state_2000.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-10-30_02-25-28_42/checkpoint/state_2000.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_Temp0.01_0.02_tdf5/2025-11-01_03-55-07_42/checkpoint/best.pt
-base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-02_05-36-17_42/checkpoint/state_2000.pt
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-02_05-36-17_42/checkpoint/state_2000.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-01_09-20-30_42/checkpoint/state_2000.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-10-30_02-21-35_42/checkpoint/state_2000.pt #collect data with action clip
 #normalization_path: ${oc.env:REINFLOW_DATA_DIR}/mikasa/${env_name}/normalization.npz
+base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-05_20-58-27_42/checkpoint/state_2000.pt
 
 seed: 42
 device: cuda:0
@@ -212,8 +213,8 @@ model:
   explore_net_activation_type: Tanh
 memory:
   embed_dim: 128  
-  read_temperature: 0.04 #0.07
-  write_temperature: 0.08 #0.14
+  read_temperature: 0.05 #0.07
+  write_temperature: 0.1 #0.14
   use_topk: false
   topk: 16
   normalize: true

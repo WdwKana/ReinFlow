@@ -41,18 +41,31 @@ class TrainReFlowAgent(PreTrainAgent):
         self.verbose_train=False #True #False #True #False #True #False
         self.verbose_loss= True #False #False #True #False #True #False # True
         self.verbose_test= False #True #False
-        from model.common.learned_memory import PatchWorkingMemory
+        if cfg.model.network.use_action_query:
+            from model.common.learned_memory import PatchActionWorkingMemory
+            self.wm = PatchActionWorkingMemory(
+                embed_dim=cfg.memory.embed_dim,
+                num_slots=self.model.network.backbone.num_patch,
+                read_temperature=cfg.memory.read_temperature,
+                write_temperature=cfg.memory.write_temperature,
+                use_topk=cfg.memory.use_topk,
+                topk=cfg.memory.topk,
+                normalize=cfg.memory.normalize,
+                device=self.device,
+            )
+        else:
+            from model.common.learned_memory import PatchWorkingMemory
+            self.wm = PatchWorkingMemory(
+                embed_dim=cfg.memory.embed_dim,
+                num_slots=self.model.network.backbone.num_patch,
+                read_temperature=cfg.memory.read_temperature,
+                write_temperature=cfg.memory.write_temperature,
+                use_topk=cfg.memory.use_topk,
+                topk=cfg.memory.topk,
+                normalize=cfg.memory.normalize,
+                device=self.device,
+            )
 
-        self.wm = PatchWorkingMemory(
-            embed_dim=cfg.memory.embed_dim,
-            num_slots=self.model.network.backbone.num_patch,
-            read_temperature=cfg.memory.read_temperature,
-            write_temperature=cfg.memory.write_temperature,
-            use_topk=cfg.memory.use_topk,
-            topk=cfg.memory.topk,
-            normalize=cfg.memory.normalize,
-            device=self.device,
-        )
         self.wm = self.wm.to(self.device)
         
         if self.test_in_mujoco:
@@ -103,6 +116,7 @@ class TrainReFlowAgent(PreTrainAgent):
         #cond.pop("episode_step", None)
         self._ensure_wm_batch(batch_size=act.shape[0])
         self._restore_memory(episode_id, episode_start)
+        cond['act_x1'] = act
         cond['wm'] = self.wm
         (xt, t), v = self.model.generate_target(act)  # here *batch_train = actions, observation, according to StitchedSequenceDataset
 

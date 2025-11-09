@@ -166,9 +166,9 @@ class SlotAttentionAutoEncoder(nn.Module):
         self.fc1 = nn.Linear(hid_dim, hid_dim)
         self.fc2 = nn.Linear(hid_dim, hid_dim)
         
-        # 添加固定的LayerNorm层
+        
         #self.encoder_layer_norm = nn.LayerNorm(hid_dim)
-        # 不训练这个LayerNorm的参数，保持随机初始化状态
+        
         #for param in self.encoder_layer_norm.parameters():
         #    param.requires_grad = False
 

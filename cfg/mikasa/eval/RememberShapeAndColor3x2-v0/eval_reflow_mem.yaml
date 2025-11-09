@@ -14,7 +14,9 @@ logdir:
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_vector_ta4_td5_tdf5/Best/best.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-02_05-36-17_42/checkpoint/state_1500.pt
 #base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-02_03-47-48_42/checkpoint/state_500.pt
-base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_from_pretrain_tanh_Temp0.04_0.08_tdf5/2025-11-02_10-55-24_33/checkpoint/state_90.pt
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100/2025-11-05_20-58-27_42/checkpoint/last.pt
+base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/pretrain/RememberShapeAndColor3x2-v0/RememberShapeAndColor3x2-v0_pre_reflow_mlp_img_ta4_td100_action_query/2025-11-07_08-02-50_42/checkpoint/state_2000.pt
+#base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/mikasa/finetune/RememberShapeAndColor3x2-v0_ft_reflow_mem_learned_matrix_from_pretrain_tanh_Temp0.04_0.08_tdf5/2025-11-02_10-55-24_33/checkpoint/state_90.pt
 load_ema: False
 seed: 42
 device: cuda:0
@@ -27,6 +29,7 @@ img_cond_steps: 1
 horizon_steps: 4
 act_steps: 4
 denoising_step_list: [5]
+use_gt_action: false
 
 n_steps: 60  # each episode takes max_episode_steps / act_steps steps
 render_num: 1
@@ -103,6 +106,7 @@ model:
         embed_style: embed2
         embed_norm: 0
     img_cond_steps: ${img_cond_steps}
+    use_action_query: true
     augment: false
     spatial_emb: 128
     time_dim: 32
@@ -122,11 +126,11 @@ model:
   sample_t_type: uniform # beta, logitnormal
 
 memory:
-  _target_: model.common.learned_memory.PatchWorkingMemory
+  _target_: model.common.learned_memory.PatchActionWorkingMemory
   embed_dim: 128
-  num_slots: null        # 留空就会自动用 backbone.num_patch，也可以直接写死 196
-  read_temperature: 0.04
-  write_temperature: 0.08
+  num_slots: null        # leave it empty to automatically use backbone.num_patch, or set it directly to 196
+  read_temperature: 0.05
+  write_temperature: 0.1
   use_topk: false
   topk: 16
   residual_scale: 1.0
